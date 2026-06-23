@@ -69,7 +69,7 @@ Firebase Console에서:
 Firestore Database → Rules
 ```
 
-아래 파일 내용을 복사해서 붙여넣고 `Publish` 합니다.
+아래 파일 내용을 복사해서 붙여넣고 `Publish` 합니다. 이 Rules에는 공략 게시판(`guidePosts`)과 7일 전 기준값 수동 보정(`weeklyOverrides`) 권한이 함께 들어 있습니다.
 
 ```text
 firestore.rules
@@ -96,18 +96,15 @@ Firebase 설정 전에는 현재 브라우저에만 임시 저장됩니다.
 5645
 ```
 
-수정 가능한 항목은 아래와 같습니다.
+수정 가능한 항목은 아래 2개입니다.
 
-- 전투력
-- 토벌전 점수
-- 메모
+- 7일 전 전투력
+- 7일 전 토벌전 점수
 
-브라우저에만 임시 적용하려면 `화면에 적용`을 누릅니다.
-전체 사용자에게 반영하려면 `manual.json 다운로드` 후 저장소의 아래 파일을 교체해서 커밋합니다.
+현재 전투력과 현재 토벌전 점수는 자동 수집값이므로 화면에서 수정할 수 없습니다.
 
-```text
-data/manual.json
-```
+Firebase 설정이 완료된 경우 `서버에 저장` 버튼을 누르면 전체 사용자에게 바로 반영됩니다. 개발자가 별도로 `manual.json`을 내려받거나 커밋할 필요가 없습니다.
+Firebase 설정 전에는 현재 브라우저에만 임시 저장됩니다.
 
 ## 링크
 
@@ -141,7 +138,7 @@ data/history.json
 
 ## Firebase 설정 주의
 
-`src/firebase-config.js` 파일에는 `FIREBASE_CONFIG`와 `FIREBASE_COLLECTION` 두 export가 모두 있어야 합니다. Firebase Console에서 복사한 초기화 코드 전체를 붙여넣지 말고 config 값만 `FIREBASE_CONFIG` 객체에 넣으세요.
+`src/firebase-config.js` 파일에는 `FIREBASE_CONFIG`, `FIREBASE_COLLECTION`, `FIREBASE_MANUAL_COLLECTION` 세 export가 모두 있어야 합니다. Firebase Console에서 복사한 초기화 코드 전체를 붙여넣지 말고 config 값만 `FIREBASE_CONFIG` 객체에 넣으세요.
 
 
 ## 데이터 기준일과 수동 갱신

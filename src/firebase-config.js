@@ -1,7 +1,6 @@
-// Firebase 게시판 설정 파일입니다.
-// 이 파일은 브라우저에서 직접 import되는 ES module입니다.
-// Firebase Console에서 제공한 config 값만 아래 객체에 넣고,
-// FIREBASE_COLLECTION export는 삭제하지 마세요.
+// Firebase 설정 파일입니다.
+// Firebase Console에서 제공한 Web App config 값만 FIREBASE_CONFIG에 넣으세요.
+// 아래 export 이름들은 main.js에서 사용하므로 삭제하지 마세요.
 
 export const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDTYYowPc2B4KKUOeuSciUGo3hQl2JkOsg",
@@ -14,3 +13,4 @@ export const FIREBASE_CONFIG = {
 };
 
 export const FIREBASE_COLLECTION = "guidePosts";
+export const FIREBASE_MANUAL_COLLECTION = "weeklyOverrides";

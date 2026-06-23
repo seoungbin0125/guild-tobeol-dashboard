@@ -36,7 +36,7 @@
       <section class="manual-guide" id="manual-guide">
         <div>
           <strong>수동 보정이 필요하면 오른쪽 버튼을 눌러 입력하세요.</strong>
-          <p>비밀번호 입력 후 전투력/토벌전 값을 수정할 수 있습니다. 저장소에 반영하려면 내려받은 <code>data/manual.json</code> 파일을 커밋하면 됩니다.</p>
+          <p>비밀번호 입력 후 <strong>7일 전 전투력</strong>과 <strong>7일 전 토벌전 점수</strong>만 수정할 수 있습니다. 현재 전투력/현재 토벌전은 자동 수집값이라 수정되지 않습니다.</p>
         </div>
         <div class="manual-actions">
           <button id="open-editor-guide" type="button">수정하기</button>
@@ -155,7 +155,7 @@
         <div>
           <p class="eyebrow mini">Manual Edit</p>
           <h2>수동 입력</h2>
-          <p id="edit-desc">비밀번호 확인 후 값을 수정할 수 있습니다.</p>
+          <p id="edit-desc">현재 값은 읽기 전용이며, 7일 전 기준값만 수정할 수 있습니다. 저장하면 전체 사용자에게 바로 반영됩니다.</p>
         </div>
         <button class="icon-btn" id="close-editor" type="button" aria-label="닫기">×</button>
       </div>
@@ -171,9 +171,8 @@
 
       <div class="editor-view hidden" id="editor-view">
         <div class="editor-actions">
-          <button class="primary-btn" id="apply-manual" type="button">화면에 적용</button>
-          <button class="secondary-btn" id="download-manual" type="button">manual.json 다운로드</button>
-          <button class="danger-btn" id="clear-manual" type="button">임시 수정 초기화</button>
+          <button class="primary-btn" id="apply-manual" type="button">서버에 저장</button>
+          <button class="danger-btn" id="clear-manual" type="button">수동 기준값 초기화</button>
         </div>
         <p class="edit-message" id="editor-message"></p>
         <div class="editor-table-wrap">
@@ -182,8 +181,10 @@
               <tr>
                 <th>길드</th>
                 <th>닉네임</th>
-                <th>전투력</th>
-                <th>토벌전</th>
+                <th>현재 전투력</th>
+                <th>7일 전 전투력</th>
+                <th>현재 토벌전</th>
+                <th>7일 전 토벌전</th>
                 <th>메모</th>
               </tr>
             </thead>

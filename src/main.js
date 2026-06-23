@@ -1,5 +1,5 @@
-import { FIREBASE_COLLECTION, FIREBASE_CONFIG } from "./firebase-config.js";
-import { createGuideBoardClient, isFirebaseConfigured } from "./firebase-board.js";
+import { FIREBASE_COLLECTION, FIREBASE_CONFIG, FIREBASE_MANUAL_COLLECTION } from "./firebase-config.js";
+import { createGuideBoardClient, createManualOverrideClient, isFirebaseConfigured } from "./firebase-board.js";
 
 const EDIT_PASSWORD = "5645";
 const LOCAL_MANUAL_KEY = "guild-tobeol-dashboard.manual.v1";
@@ -10,6 +10,9 @@ const state = {
   data: null,
   manualFromFile: null,
   localManual: null,
+  serverManual: null,
+  manualClient: null,
+  manualLoaded: false,
   postsFromFile: null,
   localPosts: null,
   posts: [],
@@ -92,6 +95,7 @@ async function init() {
     state.postsFromFile = normalizePosts(posts);
     state.localPosts = readLocalPosts();
     initFirebaseBoard();
+    initManualClient();
     rebuildPosts();
     rebuildData();
     initGuildFilter();
@@ -155,7 +159,6 @@ function bindEvents() {
     }
   });
   refs.applyManual?.addEventListener("click", applyManualFromEditor);
-  refs.downloadManual?.addEventListener("click", downloadManualFromEditor);
   refs.clearManual?.addEventListener("click", clearLocalManual);
   refs.openPostEditor?.addEventListener("click", openPostEditor);
   refs.closePostEditor?.addEventListener("click", closePostEditor);
@@ -203,7 +206,8 @@ function rebuildData() {
   const cloned = deepClone(state.rawData || {});
   const effectiveManual = mergeManualObjects([
     state.manualFromFile,
-    state.localManual
+    state.localManual,
+    state.serverManual
   ], cloned.capturedDate);
 
   applyManualOverrides(cloned, effectiveManual);
@@ -372,7 +376,7 @@ function getTableSpec(tab) {
         col("닉네임", renderName),
         col("레벨", (member) => `Lv.${member.level}`),
         col("현재 점수", (member) => formatKoreanPower(member.tobeolValue)),
-        col("이전 점수", (member) => member.previousTobeolText || "-"),
+        col("7일 전 점수", (member) => member.previousTobeolText || "-"),
         col("성장", (member) => renderGrowth(member.tobeolGrowthValue, member.tobeolGrowthText)),
         col("성장률", (member) => renderRate(member.tobeolGrowthRate))
       ]
@@ -389,7 +393,7 @@ function getTableSpec(tab) {
       col("닉네임", renderName),
       col("레벨", (member) => `Lv.${member.level}`),
       col("현재 전투력", (member) => formatKoreanPower(member.powerValue)),
-      col("이전 전투력", (member) => member.previousPowerText || "-"),
+      col("7일 전 전투력", (member) => member.previousPowerText || "-"),
       col("성장", (member) => renderGrowth(member.powerGrowthValue, member.powerGrowthText)),
       col("성장률", (member) => renderRate(member.powerGrowthRate))
     ]
@@ -466,14 +470,15 @@ function renderEditorRows() {
   const baseMembers = state.rawData?.members || [];
   const manual = mergeManualObjects([
     state.manualFromFile,
-    state.localManual
+    state.localManual,
+    state.serverManual
   ], state.rawData?.capturedDate);
   const manualMap = new Map(manual.items.map((item) => [manualKey(item), item]));
 
   refs.editorBody.innerHTML = baseMembers.map((member, index) => {
     const override = manualMap.get(manualKey(member)) || {};
-    const powerValue = valueFromManual(override, "power", member.powerValue);
-    const tobeolValue = valueFromManual(override, "tobeol", member.tobeolValue);
+    const previousPowerValue = valueFromManual(override, "previousPower", member.previousPowerValue);
+    const previousTobeolValue = valueFromManual(override, "previousTobeol", member.previousTobeolValue);
 
     return `
       <tr data-index="${index}">
@@ -483,10 +488,16 @@ function renderEditorRows() {
           <div class="muted">${escapeHtml(member.job || "-")} · Lv.${member.level || "-"}</div>
         </td>
         <td>
-          <input data-field="powerText" value="${escapeAttr(formatKoreanPower(powerValue))}" placeholder="예: 1조 2345억" />
+          <div class="readonly-value">${escapeHtml(formatKoreanPower(member.powerValue))}</div>
         </td>
         <td>
-          <input data-field="tobeolText" value="${escapeAttr(formatKoreanPower(tobeolValue))}" placeholder="예: 987억" />
+          <input data-field="previousPowerText" value="${escapeAttr(formatEditablePower(previousPowerValue))}" placeholder="예: 1조 2345억" />
+        </td>
+        <td>
+          <div class="readonly-value">${escapeHtml(formatKoreanPower(member.tobeolValue))}</div>
+        </td>
+        <td>
+          <input data-field="previousTobeolText" value="${escapeAttr(formatEditablePower(previousTobeolValue))}" placeholder="예: 987억" />
         </td>
         <td>
           <input data-field="memo" value="${escapeAttr(override.memo || "")}" placeholder="선택" />
@@ -498,6 +509,7 @@ function renderEditorRows() {
 
 function collectManualFromEditor() {
   const date = state.rawData?.capturedDate || todayString();
+  const comparisonTargetDate = state.rawData?.comparisonTargetDate || "";
   const rows = [...refs.editorBody.querySelectorAll("tr")];
   const baseMembers = state.rawData?.members || [];
   const items = [];
@@ -507,14 +519,16 @@ function collectManualFromEditor() {
     const member = baseMembers[index];
     if (!member) continue;
 
-    const powerText = row.querySelector('[data-field="powerText"]')?.value.trim() || "";
-    const tobeolText = row.querySelector('[data-field="tobeolText"]')?.value.trim() || "";
+    const previousPowerText = row.querySelector('[data-field="previousPowerText"]')?.value.trim() || "";
+    const previousTobeolText = row.querySelector('[data-field="previousTobeolText"]')?.value.trim() || "";
     const memo = row.querySelector('[data-field="memo"]')?.value.trim() || "";
-    const powerValue = parseKoreanPowerValue(powerText);
-    const tobeolValue = parseKoreanPowerValue(tobeolText);
+    const previousPowerValue = parseEditablePowerValue(previousPowerText);
+    const previousTobeolValue = parseEditablePowerValue(previousTobeolText);
 
-    const powerChanged = powerValue !== Number(member.powerValue || 0);
-    const tobeolChanged = tobeolValue !== Number(member.tobeolValue || 0);
+    const basePreviousPower = nullableNumber(member.previousPowerValue);
+    const basePreviousTobeol = nullableNumber(member.previousTobeolValue);
+    const powerChanged = !sameNullableNumber(previousPowerValue, basePreviousPower);
+    const tobeolChanged = !sameNullableNumber(previousTobeolValue, basePreviousTobeol);
 
     if (!powerChanged && !tobeolChanged && !memo) continue;
 
@@ -524,45 +538,79 @@ function collectManualFromEditor() {
     };
 
     if (powerChanged) {
-      item.powerText = powerText;
-      item.powerValue = powerValue;
+      item.previousPowerText = previousPowerText;
+      item.previousPowerValue = previousPowerValue;
     }
 
     if (tobeolChanged) {
-      item.tobeolText = tobeolText;
-      item.tobeolValue = tobeolValue;
+      item.previousTobeolText = previousTobeolText;
+      item.previousTobeolValue = previousTobeolValue;
     }
 
     if (memo) item.memo = memo;
     items.push(item);
   }
 
-  return { date, items };
+  return { date, comparisonTargetDate, items };
 }
 
-function applyManualFromEditor() {
+async function applyManualFromEditor() {
   const manual = collectManualFromEditor();
-  state.localManual = manual;
-  localStorage.setItem(LOCAL_MANUAL_KEY, JSON.stringify(manual));
-  rebuildData();
-  initGuildFilter();
-  render();
-  refs.editorMessage.textContent = `화면에 수동 보정 ${manual.items.length}건을 적용했습니다. 전체 사용자에게 반영하려면 manual.json을 다운로드해서 data/manual.json으로 커밋하세요.`;
+  refs.applyManual.disabled = true;
+  refs.editorMessage.textContent = state.manualClient?.enabled
+    ? "서버에 수동 기준값을 저장 중입니다..."
+    : "Firebase 설정 전이라 이 브라우저에 저장 중입니다...";
+
+  try {
+    if (state.manualClient?.enabled) {
+      await state.manualClient.saveManual(manual);
+      state.serverManual = manual;
+      refs.editorMessage.textContent = `수동 기준값 ${manual.items.length}건을 서버에 저장했습니다. 새로고침 후에도 전체 사용자에게 동일하게 반영됩니다.`;
+    } else {
+      state.localManual = manual;
+      localStorage.setItem(LOCAL_MANUAL_KEY, JSON.stringify(manual));
+      refs.editorMessage.textContent = `수동 기준값 ${manual.items.length}건을 이 브라우저에 저장했습니다. Firebase 설정을 완료하면 전체 사용자에게 반영됩니다.`;
+    }
+
+    rebuildData();
+    initGuildFilter();
+    render();
+  } catch (error) {
+    refs.editorMessage.textContent = `저장 실패: ${error.message}`;
+  } finally {
+    refs.applyManual.disabled = false;
+  }
 }
 
-function downloadManualFromEditor() {
-  const manual = collectManualFromEditor();
-  downloadJson("manual.json", manual);
-  refs.editorMessage.textContent = "manual.json을 다운로드했습니다. 저장소의 data/manual.json 파일로 교체 후 커밋하면 배포 화면에도 반영됩니다.";
-}
+async function clearLocalManual() {
+  const emptyManual = {
+    date: state.rawData?.capturedDate || todayString(),
+    comparisonTargetDate: state.rawData?.comparisonTargetDate || "",
+    items: []
+  };
 
-function clearLocalManual() {
-  localStorage.removeItem(LOCAL_MANUAL_KEY);
-  state.localManual = null;
-  rebuildData();
-  render();
-  renderEditorRows();
-  refs.editorMessage.textContent = "이 브라우저에 저장된 임시 수정값을 초기화했습니다.";
+  if (!confirm("저장된 수동 기준값을 초기화할까요?")) return;
+
+  refs.clearManual.disabled = true;
+  try {
+    if (state.manualClient?.enabled) {
+      await state.manualClient.saveManual(emptyManual);
+      state.serverManual = emptyManual;
+      refs.editorMessage.textContent = "서버에 저장된 수동 기준값을 초기화했습니다.";
+    } else {
+      localStorage.removeItem(LOCAL_MANUAL_KEY);
+      state.localManual = null;
+      refs.editorMessage.textContent = "이 브라우저에 저장된 수동 기준값을 초기화했습니다.";
+    }
+
+    rebuildData();
+    render();
+    renderEditorRows();
+  } catch (error) {
+    refs.editorMessage.textContent = `초기화 실패: ${error.message}`;
+  } finally {
+    refs.clearManual.disabled = false;
+  }
 }
 
 
@@ -591,6 +639,35 @@ function initFirebaseBoard() {
     state.boardLoaded = true;
   }
 }
+
+function initManualClient() {
+  const capturedDate = state.rawData?.capturedDate || todayString();
+  const documentId = `weekly-${capturedDate}`;
+
+  state.manualClient = createManualOverrideClient({
+    config: FIREBASE_CONFIG,
+    collectionName: FIREBASE_MANUAL_COLLECTION,
+    documentId,
+    onManual: (manual) => {
+      state.serverManual = manual;
+      state.manualLoaded = true;
+      rebuildData();
+      if (state.page === "dashboard") {
+        render();
+        if (state.editorUnlocked && refs.editDialog.open) renderEditorRows();
+      }
+    },
+    onError: (error) => {
+      console.error(error);
+      state.manualLoaded = true;
+    }
+  });
+
+  if (!state.manualClient.enabled) {
+    state.manualLoaded = true;
+  }
+}
+
 
 function syncBoardUi(status, message) {
   if (refs.boardStatus) {
@@ -868,20 +945,28 @@ function applyManualOverrides(data, manual) {
     const override = manualMap.get(manualKey(member));
     if (!override) return member;
 
-    const next = { ...member, isManual: true, manualMemo: override.memo || "" };
+    const hasPreviousPower = override.previousPowerValue != null || override.previousPowerText;
+    const hasPreviousTobeol = override.previousTobeolValue != null || override.previousTobeolText;
+    const next = {
+      ...member,
+      isManual: Boolean(hasPreviousPower || hasPreviousTobeol || override.memo),
+      manualMemo: override.memo || ""
+    };
 
-    if (override.powerValue != null || override.powerText) {
-      next.powerValue = valueFromManual(override, "power", next.powerValue);
-      next.powerText = formatKoreanPower(next.powerValue);
-      next.powerGrowthValue = next.previousPowerValue == null ? null : next.powerValue - Number(next.previousPowerValue || 0);
+    // 현재 전투력/현재 토벌전은 자동 수집값이므로 수동 보정하지 않습니다.
+    // 수동 입력은 7일 전 기준값에만 적용합니다.
+    if (hasPreviousPower) {
+      next.previousPowerValue = valueFromManual(override, "previousPower", next.previousPowerValue);
+      next.previousPowerText = next.previousPowerValue == null ? "" : formatKoreanPower(next.previousPowerValue);
+      next.powerGrowthValue = next.previousPowerValue == null ? null : Number(next.powerValue || 0) - Number(next.previousPowerValue || 0);
       next.powerGrowthText = next.powerGrowthValue == null ? null : formatSignedKoreanPower(next.powerGrowthValue);
       next.powerGrowthRate = calcGrowthRate(next.powerValue, next.previousPowerValue);
     }
 
-    if (override.tobeolValue != null || override.tobeolText) {
-      next.tobeolValue = valueFromManual(override, "tobeol", next.tobeolValue);
-      next.tobeolText = formatKoreanPower(next.tobeolValue);
-      next.tobeolGrowthValue = next.previousTobeolValue == null ? null : next.tobeolValue - Number(next.previousTobeolValue || 0);
+    if (hasPreviousTobeol) {
+      next.previousTobeolValue = valueFromManual(override, "previousTobeol", next.previousTobeolValue);
+      next.previousTobeolText = next.previousTobeolValue == null ? "" : formatKoreanPower(next.previousTobeolValue);
+      next.tobeolGrowthValue = next.previousTobeolValue == null ? null : Number(next.tobeolValue || 0) - Number(next.previousTobeolValue || 0);
       next.tobeolGrowthText = next.tobeolGrowthValue == null ? null : formatSignedKoreanPower(next.tobeolGrowthValue);
       next.tobeolGrowthRate = calcGrowthRate(next.tobeolValue, next.previousTobeolValue);
     }
@@ -890,20 +975,42 @@ function applyManualOverrides(data, manual) {
   });
 }
 
+
 function valueFromManual(item, prefix, fallback) {
   const valueKey = `${prefix}Value`;
   const textKey = `${prefix}Text`;
 
-  if (item[valueKey] != null && item[valueKey] !== "") {
-    return Number(item[valueKey] || 0);
+  if (item[valueKey] !== undefined && item[valueKey] !== "") {
+    return item[valueKey] == null ? null : Number(item[valueKey] || 0);
   }
 
-  if (item[textKey]) {
-    return parseKoreanPowerValue(item[textKey]);
+  if (item[textKey] !== undefined) {
+    const text = String(item[textKey] || "").trim();
+    return text ? parseKoreanPowerValue(text) : null;
   }
 
-  return Number(fallback || 0);
+  return fallback == null ? null : Number(fallback || 0);
 }
+
+function parseEditablePowerValue(text) {
+  const source = String(text || "").trim();
+  if (!source) return null;
+  return parseKoreanPowerValue(source);
+}
+
+function formatEditablePower(value) {
+  return value == null ? "" : formatKoreanPower(value);
+}
+
+function nullableNumber(value) {
+  return value == null ? null : Number(value || 0);
+}
+
+function sameNullableNumber(a, b) {
+  if (a == null && b == null) return true;
+  return Number(a || 0) === Number(b || 0);
+}
+
 
 function manualKey(item) {
   return `${String(item.guild || "").trim()}::${String(item.nickname || "").trim()}`;

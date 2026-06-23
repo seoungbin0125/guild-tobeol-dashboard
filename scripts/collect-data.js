@@ -437,7 +437,7 @@ function applyManualOverridesToMembers(members, manual, today) {
   }
 
   if (manual.date && manual.date !== today) {
-    console.log(`ℹ️ 수동 보정 파일 날짜가 오늘과 달라 적용하지 않습니다: manual=${manual.date}, today=${today}`);
+    console.log(`ℹ️ 수동 기준값 날짜가 오늘과 달라 적용하지 않습니다: manual=${manual.date}, today=${today}`);
     return 0;
   }
 
@@ -455,25 +455,27 @@ function applyManualOverridesToMembers(members, manual, today) {
 
     let applied = false;
 
-    if (override.powerValue != null || override.powerText) {
-      member.powerValue = manualValue(override, "power", member.powerValue);
-      member.powerText = formatKoreanPower(member.powerValue);
-      member.powerGrowthValue = member.previousPowerValue == null ? null : member.powerValue - Number(member.previousPowerValue || 0);
+    // 현재 전투력/현재 토벌전은 수집값을 그대로 사용하고,
+    // 수동 입력은 7일 전 기준값에만 적용합니다.
+    if (override.previousPowerValue != null || override.previousPowerText) {
+      member.previousPowerValue = manualValue(override, "previousPower", member.previousPowerValue);
+      member.previousPowerText = member.previousPowerValue == null ? null : formatKoreanPower(member.previousPowerValue);
+      member.powerGrowthValue = member.previousPowerValue == null ? null : Number(member.powerValue || 0) - Number(member.previousPowerValue || 0);
       member.powerGrowthText = member.powerGrowthValue == null ? null : formatSignedKoreanPower(member.powerGrowthValue);
       member.powerGrowthRate = calcGrowthRate(member.powerValue, member.previousPowerValue);
       applied = true;
     }
 
-    if (override.tobeolValue != null || override.tobeolText) {
-      member.tobeolValue = manualValue(override, "tobeol", member.tobeolValue);
-      member.tobeolText = formatKoreanPower(member.tobeolValue);
-      member.tobeolGrowthValue = member.previousTobeolValue == null ? null : member.tobeolValue - Number(member.previousTobeolValue || 0);
+    if (override.previousTobeolValue != null || override.previousTobeolText) {
+      member.previousTobeolValue = manualValue(override, "previousTobeol", member.previousTobeolValue);
+      member.previousTobeolText = member.previousTobeolValue == null ? null : formatKoreanPower(member.previousTobeolValue);
+      member.tobeolGrowthValue = member.previousTobeolValue == null ? null : Number(member.tobeolValue || 0) - Number(member.previousTobeolValue || 0);
       member.tobeolGrowthText = member.tobeolGrowthValue == null ? null : formatSignedKoreanPower(member.tobeolGrowthValue);
       member.tobeolGrowthRate = calcGrowthRate(member.tobeolValue, member.previousTobeolValue);
       applied = true;
     }
 
-    if (applied) {
+    if (applied || override.memo) {
       member.isManual = true;
       member.manualMemo = override.memo || "";
       appliedCount += 1;
@@ -481,26 +483,29 @@ function applyManualOverridesToMembers(members, manual, today) {
   }
 
   if (appliedCount > 0) {
-    console.log(`✅ 수동 보정 ${appliedCount}건 적용`);
+    console.log(`✅ 수동 기준값 ${appliedCount}건 적용`);
   }
 
   return appliedCount;
 }
 
+
 function manualValue(item, prefix, fallback) {
   const valueKey = `${prefix}Value`;
   const textKey = `${prefix}Text`;
 
-  if (item[valueKey] != null && item[valueKey] !== "") {
-    return Number(item[valueKey] || 0);
+  if (item[valueKey] !== undefined && item[valueKey] !== "") {
+    return item[valueKey] == null ? null : Number(item[valueKey] || 0);
   }
 
-  if (item[textKey]) {
-    return parseKoreanPowerValue(item[textKey]);
+  if (item[textKey] !== undefined) {
+    const text = String(item[textKey] || "").trim();
+    return text ? parseKoreanPowerValue(text) : null;
   }
 
-  return Number(fallback || 0);
+  return fallback == null ? null : Number(fallback || 0);
 }
+
 
 function buildComparisonDateText(guildNames, previousSnapshotsByGuild, comparisonTargetDate) {
   const entries = guildNames.map((guild) => {

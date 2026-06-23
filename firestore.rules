@@ -6,8 +6,8 @@ service cloud.firestore {
       allow read: if true;
 
       // 길드 내부용 초간단 게시판 규칙입니다.
-      // 서버 없이 GitHub Pages에서 바로 쓰기 위한 설정이라 누구나 API를 직접 호출하면 글을 쓸 수 있습니다.
-      // 진짜 관리자 보안이 필요하면 Firebase Authentication 방식으로 전환하세요.
+      // 화면에서는 비밀번호 5645를 확인하지만, 정적 사이트 특성상 강한 서버 보안은 아닙니다.
+      // 외부 공개 사이트로 운영하면서 관리자 보안이 필요하면 Firebase Authentication 방식으로 전환하세요.
       allow create: if request.resource.data.keys().hasOnly([
           'title', 'content', 'author', 'category', 'createdAt', 'updatedAt'
         ])
@@ -23,6 +23,22 @@ service cloud.firestore {
         && request.resource.data.category.size() <= 20;
 
       allow update: if false;
+      allow delete: if true;
+    }
+
+    match /weeklyOverrides/{overrideId} {
+      allow read: if true;
+
+      // 7일 전 전투력/토벌전 기준값 수동 보정용 컬렉션입니다.
+      // GitHub Pages에서 바로 저장하기 위한 길드 내부용 간단 규칙입니다.
+      allow create, update: if request.resource.data.keys().hasOnly([
+          'date', 'comparisonTargetDate', 'items', 'updatedAt'
+        ])
+        && request.resource.data.date is string
+        && request.resource.data.comparisonTargetDate is string
+        && request.resource.data.items is list
+        && request.resource.data.items.size() <= 300;
+
       allow delete: if true;
     }
   }

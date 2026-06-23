@@ -1,4 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getApp, getApps, initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import {
   addDoc,
   collection,
@@ -8,7 +8,8 @@ import {
   onSnapshot,
   orderBy,
   query,
-  serverTimestamp
+  serverTimestamp,
+  setDoc
 } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 export function isFirebaseConfigured(config) {
@@ -42,7 +43,7 @@ export function createGuideBoardClient({
     };
   }
 
-  const app = initializeApp(config);
+  const app = getFirebaseApp(config);
   const db = getFirestore(app);
   const postsRef = collection(db, collectionName);
   const postsQuery = query(postsRef, orderBy("createdAt", "desc"));
@@ -78,6 +79,73 @@ export function createGuideBoardClient({
       await deleteDoc(doc(db, collectionName, id));
     },
     unsubscribe
+  };
+}
+
+
+export function createManualOverrideClient({
+  config,
+  collectionName = "weeklyOverrides",
+  documentId,
+  onManual,
+  onError,
+  onStatus
+}) {
+  if (!isFirebaseConfigured(config)) {
+    onStatus?.("local", "Firebase 설정 전: 이 브라우저에만 저장됩니다.");
+    return {
+      enabled: false,
+      async saveManual() {
+        throw new Error("Firebase 설정이 없습니다.");
+      },
+      unsubscribe() {}
+    };
+  }
+
+  const app = getFirebaseApp(config);
+  const db = getFirestore(app);
+  const manualRef = doc(db, collectionName, documentId || "current");
+
+  onStatus?.("connecting", "수동 기준값 서버 연결 중...");
+
+  const unsubscribe = onSnapshot(
+    manualRef,
+    (snapshot) => {
+      const manual = snapshot.exists()
+        ? normalizeFirestoreManual(snapshot.data())
+        : null;
+      onManual?.(manual);
+      onStatus?.("online", manual?.items?.length ? `수동 기준값 ${manual.items.length}건 적용 중` : "수동 기준값 없음");
+    },
+    (error) => {
+      onError?.(error);
+      onStatus?.("error", `수동 기준값 연결 실패: ${error.message}`);
+    }
+  );
+
+  return {
+    enabled: true,
+    async saveManual(manual) {
+      await setDoc(manualRef, {
+        date: manual.date || "",
+        comparisonTargetDate: manual.comparisonTargetDate || "",
+        items: Array.isArray(manual.items) ? manual.items : [],
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    },
+    unsubscribe
+  };
+}
+
+function getFirebaseApp(config) {
+  return getApps().length ? getApp() : initializeApp(config);
+}
+
+function normalizeFirestoreManual(data) {
+  return {
+    date: String(data.date || ""),
+    comparisonTargetDate: String(data.comparisonTargetDate || ""),
+    items: Array.isArray(data.items) ? data.items : []
   };
 }
 
