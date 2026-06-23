@@ -1,3 +1,5 @@
+
+
 export const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDTYYowPc2B4KKUOeuSciUGo3hQl2JkOsg",
   authDomain: "meki-guild1.firebaseapp.com",
@@ -7,3 +9,5 @@ export const FIREBASE_CONFIG = {
   appId: "1:26303880990:web:ef310d5f3159115578f30f",
   measurementId: "G-TSR1FVNPN3"
 };
+
+export const FIREBASE_COLLECTION = "guidePosts";
