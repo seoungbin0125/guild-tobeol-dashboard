@@ -1,0 +1,30 @@
+[
+  {
+    "date": "2026-06-16",
+    "guild": "반짝",
+    "members": [
+      {
+        "nickname": "예시닉네임",
+        "rank": 1,
+        "job": "직업명",
+        "level": 285,
+        "powerValue": 1000000000000,
+        "tobeolValue": 500000000000
+      }
+    ]
+  },
+  {
+    "date": "2026-06-16",
+    "guild": "풍년순대국밥",
+    "members": [
+      {
+        "nickname": "예시닉네임2",
+        "rank": 1,
+        "job": "직업명",
+        "level": 280,
+        "powerValue": 900000000000,
+        "tobeolValue": 400000000000
+      }
+    ]
+  }
+]

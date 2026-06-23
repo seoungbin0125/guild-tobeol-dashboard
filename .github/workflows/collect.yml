@@ -1,0 +1,36 @@
+name: Collect MGF Data
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 매일 KST 00:10 실행 = UTC 15:10
+    - cron: "10 15 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Collect data
+        env:
+          GUILD_NAMES: 반짝,풍년순대국밥
+          SERVER_ID: "4"
+          TOBEOL_MAX_PAGE: "10"
+        run: node scripts/collect-mgf.js
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update MGF dashboard data"
+          file_pattern: data/latest.json data/history.json
