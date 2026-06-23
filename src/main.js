@@ -1,15 +1,29 @@
+const EDIT_PASSWORD = "5645";
+const LOCAL_MANUAL_KEY = "guild-tobeol-dashboard.manual.v1";
+const LOCAL_POSTS_KEY = "guild-tobeol-dashboard.guide-posts.v1";
+
 const state = {
+  rawData: null,
   data: null,
+  manualFromFile: null,
+  localManual: null,
+  postsFromFile: null,
+  localPosts: null,
+  posts: [],
+  page: "dashboard",
   tab: "power",
   guildFilter: "all",
   keyword: "",
-  sort: "powerGrowth"
+  sort: "powerGrowth",
+  editorUnlocked: false
 };
 
 const refs = {
   title: document.getElementById("title"),
   subtitle: document.getElementById("subtitle"),
   summaryGrid: document.getElementById("summary-grid"),
+  mainTabs: document.querySelectorAll(".main-tab"),
+  pages: document.querySelectorAll(".content-page"),
   tabs: document.querySelectorAll(".tab"),
   guildFilter: document.getElementById("guild-filter"),
   keyword: document.getElementById("keyword"),
@@ -18,7 +32,36 @@ const refs = {
   panelDesc: document.getElementById("panel-desc"),
   tableHead: document.getElementById("table-head"),
   tableBody: document.getElementById("table-body"),
-  footerText: document.getElementById("footer-text")
+  footerText: document.getElementById("footer-text"),
+  editDialog: document.getElementById("edit-dialog"),
+  openEditor: document.getElementById("open-editor"),
+  openEditorGuide: document.getElementById("open-editor-guide"),
+  closeEditor: document.getElementById("close-editor"),
+  passwordView: document.getElementById("password-view"),
+  editorView: document.getElementById("editor-view"),
+  editorPassword: document.getElementById("editor-password"),
+  unlockEditor: document.getElementById("unlock-editor"),
+  passwordMessage: document.getElementById("password-message"),
+  editorBody: document.getElementById("editor-body"),
+  applyManual: document.getElementById("apply-manual"),
+  downloadManual: document.getElementById("download-manual"),
+  clearManual: document.getElementById("clear-manual"),
+  editorMessage: document.getElementById("editor-message"),
+  openPostEditor: document.getElementById("open-post-editor"),
+  postDialog: document.getElementById("post-dialog"),
+  closePostEditor: document.getElementById("close-post-editor"),
+  postPassword: document.getElementById("post-password"),
+  postAuthor: document.getElementById("post-author"),
+  postCategory: document.getElementById("post-category"),
+  postTitle: document.getElementById("post-title"),
+  postContent: document.getElementById("post-content"),
+  savePost: document.getElementById("save-post"),
+  resetPostForm: document.getElementById("reset-post-form"),
+  postMessage: document.getElementById("post-message"),
+  postList: document.getElementById("post-list"),
+  downloadPosts: document.getElementById("download-posts"),
+  importPosts: document.getElementById("import-posts"),
+  clearLocalPosts: document.getElementById("clear-local-posts")
 };
 
 init();
@@ -27,18 +70,45 @@ async function init() {
   bindEvents();
 
   try {
-    const res = await fetch(`data/latest.json?ts=${Date.now()}`);
-    if (!res.ok) throw new Error(`latest.json 로딩 실패: ${res.status}`);
-    state.data = await res.json();
+    const [latest, manual, posts] = await Promise.all([
+      fetchJson("data/latest.json", true),
+      fetchJson("data/manual.json", false),
+      fetchJson("data/guide-posts.json", false)
+    ]);
+
+    state.rawData = latest;
+    state.manualFromFile = manual;
+    state.localManual = readLocalManual();
+    state.postsFromFile = normalizePosts(posts);
+    state.localPosts = readLocalPosts();
+    rebuildPosts();
+    rebuildData();
     initGuildFilter();
-    render();
+    renderPage();
   } catch (error) {
     refs.tableBody.innerHTML = `<tr><td colspan="99" class="empty">${escapeHtml(error.message)}</td></tr>`;
     refs.footerText.textContent = "data/latest.json 파일을 확인해주세요.";
   }
 }
 
+async function fetchJson(path, required) {
+  const response = await fetch(`${path}?ts=${Date.now()}`);
+  if (!response.ok) {
+    if (!required && response.status === 404) return null;
+    throw new Error(`${path} 로딩 실패: ${response.status}`);
+  }
+  return response.json();
+}
+
 function bindEvents() {
+  refs.mainTabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      state.page = tab.dataset.page;
+      refs.mainTabs.forEach((item) => item.classList.toggle("active", item === tab));
+      renderPage();
+    });
+  });
+
   refs.tabs.forEach((tab) => {
     tab.addEventListener("click", () => {
       state.tab = tab.dataset.tab;
@@ -62,6 +132,79 @@ function bindEvents() {
     state.sort = event.target.value;
     renderTable();
   });
+
+  refs.openEditor?.addEventListener("click", openEditor);
+  refs.openEditorGuide?.addEventListener("click", openEditor);
+  refs.closeEditor?.addEventListener("click", closeEditor);
+  refs.unlockEditor?.addEventListener("click", unlockEditor);
+  refs.editorPassword?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      unlockEditor();
+    }
+  });
+  refs.applyManual?.addEventListener("click", applyManualFromEditor);
+  refs.downloadManual?.addEventListener("click", downloadManualFromEditor);
+  refs.clearManual?.addEventListener("click", clearLocalManual);
+  refs.openPostEditor?.addEventListener("click", openPostEditor);
+  refs.closePostEditor?.addEventListener("click", closePostEditor);
+  refs.savePost?.addEventListener("click", savePostFromForm);
+  refs.resetPostForm?.addEventListener("click", resetPostForm);
+  refs.downloadPosts?.addEventListener("click", downloadPosts);
+  refs.importPosts?.addEventListener("change", importPostsFromFile);
+  refs.clearLocalPosts?.addEventListener("click", clearLocalPosts);
+}
+
+function renderPage() {
+  refs.pages.forEach((page) => {
+    page.classList.toggle("active", page.id === `page-${state.page}`);
+  });
+
+  if (state.page === "dashboard") {
+    render();
+    return;
+  }
+
+  if (state.page === "guide") {
+    refs.title.textContent = "공략 게시판";
+    refs.subtitle.textContent = "길드 공략을 작성하고 공유하는 공간";
+    renderPosts();
+    refs.footerText.textContent = "공략글은 브라우저에 저장됩니다. 공유하려면 guide-posts.json을 커밋하세요.";
+    return;
+  }
+
+  if (state.page === "links") {
+    refs.title.textContent = "길드 링크";
+    refs.subtitle.textContent = "디스코드와 메키 단톡방 바로가기";
+    refs.footerText.textContent = "외부 링크는 새 창으로 열립니다.";
+    return;
+  }
+
+  if (state.page === "rest") {
+    refs.title.textContent = "쉬어가기";
+    refs.subtitle.textContent = "게임 1 · 게임 2";
+    refs.footerText.textContent = "잠깐 쉬었다 가도 됩니다. 이게 진짜 효율 사냥일지도.";
+  }
+}
+
+function rebuildData() {
+  const cloned = deepClone(state.rawData || {});
+  const effectiveManual = mergeManualObjects([
+    state.manualFromFile,
+    state.localManual
+  ], cloned.capturedDate);
+
+  applyManualOverrides(cloned, effectiveManual);
+  cloned.summary = buildSummary(cloned.members || []);
+  cloned.guildSummaries = Object.fromEntries(
+    getGuildsFromData(cloned).map((guild) => [
+      guild,
+      buildSummary((cloned.members || []).filter((member) => member.guild === guild))
+    ])
+  );
+  cloned.manualAppliedCount = effectiveManual.items.length;
+
+  state.data = cloned;
 }
 
 function initGuildFilter() {
@@ -74,8 +217,12 @@ function initGuildFilter() {
 }
 
 function getGuilds() {
-  const declared = Array.isArray(state.data?.guilds) ? state.data.guilds : [];
-  const fromMembers = [...new Set((state.data?.members || []).map((member) => member.guild).filter(Boolean))];
+  return getGuildsFromData(state.data);
+}
+
+function getGuildsFromData(data) {
+  const declared = Array.isArray(data?.guilds) ? data.guilds : [];
+  const fromMembers = [...new Set((data?.members || []).map((member) => member.guild).filter(Boolean))];
   return [...new Set([...declared, ...fromMembers])];
 }
 
@@ -96,7 +243,10 @@ function render() {
   renderSummary();
   renderTable();
 
-  refs.footerText.textContent = `${selectedGuildText || "-"} 길드 내부 참고용 · ${data.capturedDate || "-"} 수집`;
+  if (state.page !== "dashboard") return;
+
+  const manualText = data.manualAppliedCount > 0 ? ` · 수동 보정 ${data.manualAppliedCount}건 포함` : "";
+  refs.footerText.textContent = `${selectedGuildText || "-"} 길드 내부 참고용 · ${data.capturedDate || "-"} 수집${manualText}`;
 }
 
 function renderSummary() {
@@ -131,7 +281,7 @@ function renderTable() {
   }
 
   refs.tableBody.innerHTML = members.map((member, index) => `
-    <tr>
+    <tr class="${member.isManual ? "manual-row" : ""}">
       ${table.columns.map((column) => `<td>${column.render(member, index)}</td>`).join("")}
     </tr>
   `).join("");
@@ -168,16 +318,16 @@ function getTableSpec(tab) {
   if (tab === "tobeol") {
     return {
       title: "토벌전 점수 성장",
-      desc: "반짝/풍년순대국밥 길드원 닉네임 기준으로 매칭한 토벌전 점수입니다.",
+      desc: "길드원 닉네임 기준으로 매칭한 토벌전 점수입니다.",
       columns: [
         col("#", (_, index) => `<span class="badge">${index + 1}</span>`),
         col("길드", renderGuild),
         col("닉네임", renderName),
-        col("레벨", (m) => `Lv.${m.level}`),
-        col("현재 점수", (m) => formatKoreanPower(m.tobeolValue)),
-        col("이전 점수", (m) => m.previousTobeolText || "-"),
-        col("성장", (m) => renderGrowth(m.tobeolGrowthValue, m.tobeolGrowthText)),
-        col("성장률", (m) => renderRate(m.tobeolGrowthRate))
+        col("레벨", (member) => `Lv.${member.level}`),
+        col("현재 점수", (member) => formatKoreanPower(member.tobeolValue)),
+        col("이전 점수", (member) => member.previousTobeolText || "-"),
+        col("성장", (member) => renderGrowth(member.tobeolGrowthValue, member.tobeolGrowthText)),
+        col("성장률", (member) => renderRate(member.tobeolGrowthRate))
       ]
     };
   }
@@ -188,13 +338,13 @@ function getTableSpec(tab) {
     columns: [
       col("#", (_, index) => `<span class="badge">${index + 1}</span>`),
       col("길드", renderGuild),
-      col("길드순위", (m) => `<span class="badge">${m.rank}</span>`),
+      col("길드순위", (member) => `<span class="badge">${member.rank}</span>`),
       col("닉네임", renderName),
-      col("레벨", (m) => `Lv.${m.level}`),
-      col("현재 전투력", (m) => formatKoreanPower(m.powerValue)),
-      col("이전 전투력", (m) => m.previousPowerText || "-"),
-      col("성장", (m) => renderGrowth(m.powerGrowthValue, m.powerGrowthText)),
-      col("성장률", (m) => renderRate(m.powerGrowthRate))
+      col("레벨", (member) => `Lv.${member.level}`),
+      col("현재 전투력", (member) => formatKoreanPower(member.powerValue)),
+      col("이전 전투력", (member) => member.previousPowerText || "-"),
+      col("성장", (member) => renderGrowth(member.powerGrowthValue, member.powerGrowthText)),
+      col("성장률", (member) => renderRate(member.powerGrowthRate))
     ]
   };
 }
@@ -208,8 +358,9 @@ function renderGuild(member) {
 }
 
 function renderName(member) {
+  const manualBadge = member.isManual ? `<span class="manual-badge">수동</span>` : "";
   return `
-    <div class="nickname">${escapeHtml(member.nickname)}</div>
+    <div class="nickname">${escapeHtml(member.nickname)} ${manualBadge}</div>
     <div class="muted">${escapeHtml(member.job || "-")}</div>
   `;
 }
@@ -227,6 +378,391 @@ function renderRate(value) {
   return `<span class="${className}">${numberFormat(value)}%</span>`;
 }
 
+function openEditor() {
+  if (!state.rawData) return;
+  refs.editDialog.showModal();
+  refs.passwordMessage.textContent = "";
+  refs.editorMessage.textContent = "";
+
+  if (state.editorUnlocked) {
+    showEditorView();
+  } else {
+    refs.passwordView.classList.remove("hidden");
+    refs.editorView.classList.add("hidden");
+    refs.editorPassword.value = "";
+    setTimeout(() => refs.editorPassword.focus(), 0);
+  }
+}
+
+function closeEditor() {
+  refs.editDialog.close();
+}
+
+function unlockEditor() {
+  if (refs.editorPassword.value !== EDIT_PASSWORD) {
+    refs.passwordMessage.textContent = "비밀번호가 맞지 않습니다.";
+    refs.editorPassword.select();
+    return;
+  }
+
+  state.editorUnlocked = true;
+  showEditorView();
+}
+
+function showEditorView() {
+  refs.passwordView.classList.add("hidden");
+  refs.editorView.classList.remove("hidden");
+  renderEditorRows();
+}
+
+function renderEditorRows() {
+  const baseMembers = state.rawData?.members || [];
+  const manual = mergeManualObjects([
+    state.manualFromFile,
+    state.localManual
+  ], state.rawData?.capturedDate);
+  const manualMap = new Map(manual.items.map((item) => [manualKey(item), item]));
+
+  refs.editorBody.innerHTML = baseMembers.map((member, index) => {
+    const override = manualMap.get(manualKey(member)) || {};
+    const powerValue = valueFromManual(override, "power", member.powerValue);
+    const tobeolValue = valueFromManual(override, "tobeol", member.tobeolValue);
+
+    return `
+      <tr data-index="${index}">
+        <td>${escapeHtml(member.guild || "-")}</td>
+        <td>
+          <strong>${escapeHtml(member.nickname)}</strong>
+          <div class="muted">${escapeHtml(member.job || "-")} · Lv.${member.level || "-"}</div>
+        </td>
+        <td>
+          <input data-field="powerText" value="${escapeAttr(formatKoreanPower(powerValue))}" placeholder="예: 1조 2345억" />
+        </td>
+        <td>
+          <input data-field="tobeolText" value="${escapeAttr(formatKoreanPower(tobeolValue))}" placeholder="예: 987억" />
+        </td>
+        <td>
+          <input data-field="memo" value="${escapeAttr(override.memo || "")}" placeholder="선택" />
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function collectManualFromEditor() {
+  const date = state.rawData?.capturedDate || todayString();
+  const rows = [...refs.editorBody.querySelectorAll("tr")];
+  const baseMembers = state.rawData?.members || [];
+  const items = [];
+
+  for (const row of rows) {
+    const index = Number(row.dataset.index);
+    const member = baseMembers[index];
+    if (!member) continue;
+
+    const powerText = row.querySelector('[data-field="powerText"]')?.value.trim() || "";
+    const tobeolText = row.querySelector('[data-field="tobeolText"]')?.value.trim() || "";
+    const memo = row.querySelector('[data-field="memo"]')?.value.trim() || "";
+    const powerValue = parseKoreanPowerValue(powerText);
+    const tobeolValue = parseKoreanPowerValue(tobeolText);
+
+    const powerChanged = powerValue !== Number(member.powerValue || 0);
+    const tobeolChanged = tobeolValue !== Number(member.tobeolValue || 0);
+
+    if (!powerChanged && !tobeolChanged && !memo) continue;
+
+    const item = {
+      guild: member.guild,
+      nickname: member.nickname
+    };
+
+    if (powerChanged) {
+      item.powerText = powerText;
+      item.powerValue = powerValue;
+    }
+
+    if (tobeolChanged) {
+      item.tobeolText = tobeolText;
+      item.tobeolValue = tobeolValue;
+    }
+
+    if (memo) item.memo = memo;
+    items.push(item);
+  }
+
+  return { date, items };
+}
+
+function applyManualFromEditor() {
+  const manual = collectManualFromEditor();
+  state.localManual = manual;
+  localStorage.setItem(LOCAL_MANUAL_KEY, JSON.stringify(manual));
+  rebuildData();
+  initGuildFilter();
+  render();
+  refs.editorMessage.textContent = `화면에 수동 보정 ${manual.items.length}건을 적용했습니다. 전체 사용자에게 반영하려면 manual.json을 다운로드해서 data/manual.json으로 커밋하세요.`;
+}
+
+function downloadManualFromEditor() {
+  const manual = collectManualFromEditor();
+  downloadJson("manual.json", manual);
+  refs.editorMessage.textContent = "manual.json을 다운로드했습니다. 저장소의 data/manual.json 파일로 교체 후 커밋하면 배포 화면에도 반영됩니다.";
+}
+
+function clearLocalManual() {
+  localStorage.removeItem(LOCAL_MANUAL_KEY);
+  state.localManual = null;
+  rebuildData();
+  render();
+  renderEditorRows();
+  refs.editorMessage.textContent = "이 브라우저에 저장된 임시 수정값을 초기화했습니다.";
+}
+
+
+function openPostEditor() {
+  refs.postDialog.showModal();
+  refs.postMessage.textContent = "";
+  setTimeout(() => refs.postPassword.focus(), 0);
+}
+
+function closePostEditor() {
+  refs.postDialog.close();
+}
+
+function savePostFromForm() {
+  if (refs.postPassword.value !== EDIT_PASSWORD) {
+    refs.postMessage.textContent = "비밀번호가 맞지 않습니다.";
+    refs.postPassword.select();
+    return;
+  }
+
+  const title = refs.postTitle.value.trim();
+  const content = refs.postContent.value.trim();
+  const author = refs.postAuthor.value.trim() || "익명";
+  const category = refs.postCategory.value || "기타";
+
+  if (!title || !content) {
+    refs.postMessage.textContent = "제목과 내용을 입력해주세요.";
+    return;
+  }
+
+  const post = {
+    id: `post-${Date.now()}`,
+    title,
+    content,
+    author,
+    category,
+    createdAt: new Date().toISOString()
+  };
+
+  const localPosts = normalizePosts(state.localPosts);
+  state.localPosts = [post, ...localPosts];
+  localStorage.setItem(LOCAL_POSTS_KEY, JSON.stringify({ posts: state.localPosts }));
+  rebuildPosts();
+  renderPosts();
+  refs.postMessage.textContent = "공략글을 저장했습니다. 전체 사용자에게 공유하려면 guide-posts.json을 다운로드해서 data/guide-posts.json으로 커밋하세요.";
+  resetPostForm(false);
+}
+
+function resetPostForm(clearMessage = true) {
+  refs.postPassword.value = "";
+  refs.postTitle.value = "";
+  refs.postContent.value = "";
+  refs.postAuthor.value = "";
+  refs.postCategory.value = "토벌전";
+  if (clearMessage) refs.postMessage.textContent = "";
+}
+
+function rebuildPosts() {
+  const byId = new Map();
+  for (const post of [...normalizePosts(state.postsFromFile), ...normalizePosts(state.localPosts)]) {
+    if (!post.title || !post.content) continue;
+    const id = post.id || `${post.title}-${post.createdAt || ""}`;
+    byId.set(id, { ...post, id });
+  }
+
+  state.posts = [...byId.values()].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+}
+
+function renderPosts() {
+  if (!refs.postList) return;
+
+  if (!state.posts.length) {
+    refs.postList.innerHTML = `
+      <div class="empty board-empty">
+        아직 등록된 공략이 없습니다.<br />
+        <strong>공략 작성하기</strong> 버튼으로 첫 글을 작성해보세요.
+      </div>
+    `;
+    return;
+  }
+
+  refs.postList.innerHTML = state.posts.map((post) => `
+    <article class="post-card">
+      <div class="post-meta">
+        <span class="guild-pill">${escapeHtml(post.category || "기타")}</span>
+        <span>${escapeHtml(post.author || "익명")}</span>
+        <span>${formatPostDate(post.createdAt)}</span>
+      </div>
+      <h3>${escapeHtml(post.title)}</h3>
+      <p>${escapeHtml(post.content).replace(/\n/g, "<br />")}</p>
+    </article>
+  `).join("");
+}
+
+function downloadPosts() {
+  const value = {
+    updatedAt: new Date().toISOString(),
+    posts: state.posts
+  };
+  downloadJson("guide-posts.json", value);
+}
+
+async function importPostsFromFile(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  try {
+    const text = await file.text();
+    state.localPosts = normalizePosts(JSON.parse(text));
+    localStorage.setItem(LOCAL_POSTS_KEY, JSON.stringify({ posts: state.localPosts }));
+    rebuildPosts();
+    renderPosts();
+  } catch (error) {
+    alert(`guide-posts.json 불러오기 실패: ${error.message}`);
+  } finally {
+    event.target.value = "";
+  }
+}
+
+function clearLocalPosts() {
+  if (!confirm("이 브라우저에 저장된 공략 임시글을 초기화할까요?")) return;
+  localStorage.removeItem(LOCAL_POSTS_KEY);
+  state.localPosts = null;
+  rebuildPosts();
+  renderPosts();
+}
+
+function readLocalPosts() {
+  try {
+    const raw = localStorage.getItem(LOCAL_POSTS_KEY);
+    return raw ? normalizePosts(JSON.parse(raw)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizePosts(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value.posts)) return value.posts;
+  return [];
+}
+
+function formatPostDate(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
+}
+
+function readLocalManual() {
+  try {
+    const raw = localStorage.getItem(LOCAL_MANUAL_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function mergeManualObjects(manualObjects, capturedDate) {
+  const map = new Map();
+
+  for (const manual of manualObjects) {
+    if (!manual || !Array.isArray(manual.items)) continue;
+    if (manual.date && capturedDate && manual.date !== capturedDate) continue;
+
+    for (const item of manual.items) {
+      if (!item?.guild || !item?.nickname) continue;
+      map.set(manualKey(item), {
+        ...(map.get(manualKey(item)) || {}),
+        ...item
+      });
+    }
+  }
+
+  return {
+    date: capturedDate || "",
+    items: [...map.values()]
+  };
+}
+
+function applyManualOverrides(data, manual) {
+  if (!Array.isArray(data.members) || !manual?.items?.length) return;
+
+  const manualMap = new Map(manual.items.map((item) => [manualKey(item), item]));
+
+  data.members = data.members.map((member) => {
+    const override = manualMap.get(manualKey(member));
+    if (!override) return member;
+
+    const next = { ...member, isManual: true, manualMemo: override.memo || "" };
+
+    if (override.powerValue != null || override.powerText) {
+      next.powerValue = valueFromManual(override, "power", next.powerValue);
+      next.powerText = formatKoreanPower(next.powerValue);
+      next.powerGrowthValue = next.previousPowerValue == null ? null : next.powerValue - Number(next.previousPowerValue || 0);
+      next.powerGrowthText = next.powerGrowthValue == null ? null : formatSignedKoreanPower(next.powerGrowthValue);
+      next.powerGrowthRate = calcGrowthRate(next.powerValue, next.previousPowerValue);
+    }
+
+    if (override.tobeolValue != null || override.tobeolText) {
+      next.tobeolValue = valueFromManual(override, "tobeol", next.tobeolValue);
+      next.tobeolText = formatKoreanPower(next.tobeolValue);
+      next.tobeolGrowthValue = next.previousTobeolValue == null ? null : next.tobeolValue - Number(next.previousTobeolValue || 0);
+      next.tobeolGrowthText = next.tobeolGrowthValue == null ? null : formatSignedKoreanPower(next.tobeolGrowthValue);
+      next.tobeolGrowthRate = calcGrowthRate(next.tobeolValue, next.previousTobeolValue);
+    }
+
+    return next;
+  });
+}
+
+function valueFromManual(item, prefix, fallback) {
+  const valueKey = `${prefix}Value`;
+  const textKey = `${prefix}Text`;
+
+  if (item[valueKey] != null && item[valueKey] !== "") {
+    return Number(item[valueKey] || 0);
+  }
+
+  if (item[textKey]) {
+    return parseKoreanPowerValue(item[textKey]);
+  }
+
+  return Number(fallback || 0);
+}
+
+function manualKey(item) {
+  return `${String(item.guild || "").trim()}::${String(item.nickname || "").trim()}`;
+}
+
+function downloadJson(filename, value) {
+  const blob = new Blob([`${JSON.stringify(value, null, 2)}\n`], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 function buildSummary(members) {
   return {
     guildCount: new Set(members.map((member) => member.guild).filter(Boolean)).size,
@@ -234,6 +770,31 @@ function buildSummary(members) {
     totalPowerValue: members.reduce((sum, member) => sum + Number(member.powerValue || 0), 0),
     totalTobeolValue: members.reduce((sum, member) => sum + Number(member.tobeolValue || 0), 0)
   };
+}
+
+function parseKoreanPowerValue(text) {
+  const source = String(text || "").replace(/,/g, "").trim();
+  if (!source) return 0;
+
+  if (/^\d+(\.\d+)?$/.test(source)) {
+    return Number(source);
+  }
+
+  const gyeong = getLastUnitValue(source, "경");
+  const jo = getLastUnitValue(source, "조");
+  const eok = getLastUnitValue(source, "억");
+  const man = getLastUnitValue(source, "만");
+
+  return (gyeong * 10_000_000_000_000_000) +
+    (jo * 1_000_000_000_000) +
+    (eok * 100_000_000) +
+    (man * 10_000);
+}
+
+function getLastUnitValue(source, unit) {
+  const pattern = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*${unit}`, "g");
+  const matches = [...String(source || "").matchAll(pattern)].map((item) => Number(item[1]));
+  return matches.length ? matches[matches.length - 1] : 0;
 }
 
 function formatKoreanPower(value) {
@@ -255,8 +816,30 @@ function formatKoreanPower(value) {
   return parts.join(" ") || "0";
 }
 
+function formatSignedKoreanPower(value) {
+  const n = Number(value || 0);
+  if (n === 0) return "0";
+  return `${n > 0 ? "+" : "-"}${formatKoreanPower(Math.abs(n))}`;
+}
+
+function calcGrowthRate(current, previous) {
+  const c = Number(current || 0);
+  const p = Number(previous || 0);
+  if (!p) return null;
+  return Number((((c - p) / p) * 100).toFixed(2));
+}
+
 function numberFormat(value) {
   return Number(value || 0).toLocaleString("ko-KR");
+}
+
+function deepClone(value) {
+  return JSON.parse(JSON.stringify(value ?? null));
+}
+
+function todayString() {
+  const now = new Date();
+  return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 function escapeHtml(value) {

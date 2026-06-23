@@ -17,6 +17,7 @@ const DEFAULT_MEMBER_LIMIT = Number(process.env.MEMBER_LIMIT || 30);
 const DATA_DIR = path.join(ROOT_DIR, "data");
 const LATEST_PATH = path.join(DATA_DIR, "latest.json");
 const HISTORY_PATH = path.join(DATA_DIR, "history.json");
+const MANUAL_PATH = path.join(DATA_DIR, "manual.json");
 
 async function run() {
   const args = parseArgs(process.argv.slice(2));
@@ -73,6 +74,7 @@ async function run() {
   console.log("✅ 토벌전 점수 매칭 완료");
 
   const history = await readJsonFile(HISTORY_PATH, []);
+  const manual = await readJsonFile(MANUAL_PATH, null);
 
   const mergedMembers = guildResults.flatMap(({ guild, members }) => {
     const previousSnapshot = findPreviousSnapshot(history, today, guild);
@@ -111,6 +113,8 @@ async function run() {
     });
   });
 
+  const manualAppliedCount = applyManualOverridesToMembers(mergedMembers, manual, today);
+
   const latest = {
     ok: true,
     version: 2,
@@ -118,6 +122,7 @@ async function run() {
     guild: guildNames.join(" · "),
     capturedDate: today,
     summary: buildSummary(mergedMembers),
+    manualAppliedCount,
     guildSummaries: Object.fromEntries(
       guildNames.map((guild) => [
         guild,
@@ -410,6 +415,78 @@ function calcGrowthRate(current, previous) {
   const p = Number(previous || 0);
   if (!p) return null;
   return Number((((c - p) / p) * 100).toFixed(2));
+}
+
+
+function applyManualOverridesToMembers(members, manual, today) {
+  if (!manual || !Array.isArray(manual.items) || manual.items.length === 0) {
+    return 0;
+  }
+
+  if (manual.date && manual.date !== today) {
+    console.log(`ℹ️ 수동 보정 파일 날짜가 오늘과 달라 적용하지 않습니다: manual=${manual.date}, today=${today}`);
+    return 0;
+  }
+
+  const manualMap = new Map(
+    manual.items
+      .filter((item) => item && item.guild && item.nickname)
+      .map((item) => [memberKey(item.guild, item.nickname), item])
+  );
+
+  let appliedCount = 0;
+
+  for (const member of members) {
+    const override = manualMap.get(memberKey(member.guild, member.nickname));
+    if (!override) continue;
+
+    let applied = false;
+
+    if (override.powerValue != null || override.powerText) {
+      member.powerValue = manualValue(override, "power", member.powerValue);
+      member.powerText = formatKoreanPower(member.powerValue);
+      member.powerGrowthValue = member.previousPowerValue == null ? null : member.powerValue - Number(member.previousPowerValue || 0);
+      member.powerGrowthText = member.powerGrowthValue == null ? null : formatSignedKoreanPower(member.powerGrowthValue);
+      member.powerGrowthRate = calcGrowthRate(member.powerValue, member.previousPowerValue);
+      applied = true;
+    }
+
+    if (override.tobeolValue != null || override.tobeolText) {
+      member.tobeolValue = manualValue(override, "tobeol", member.tobeolValue);
+      member.tobeolText = formatKoreanPower(member.tobeolValue);
+      member.tobeolGrowthValue = member.previousTobeolValue == null ? null : member.tobeolValue - Number(member.previousTobeolValue || 0);
+      member.tobeolGrowthText = member.tobeolGrowthValue == null ? null : formatSignedKoreanPower(member.tobeolGrowthValue);
+      member.tobeolGrowthRate = calcGrowthRate(member.tobeolValue, member.previousTobeolValue);
+      applied = true;
+    }
+
+    if (applied) {
+      member.isManual = true;
+      member.manualMemo = override.memo || "";
+      appliedCount += 1;
+    }
+  }
+
+  if (appliedCount > 0) {
+    console.log(`✅ 수동 보정 ${appliedCount}건 적용`);
+  }
+
+  return appliedCount;
+}
+
+function manualValue(item, prefix, fallback) {
+  const valueKey = `${prefix}Value`;
+  const textKey = `${prefix}Text`;
+
+  if (item[valueKey] != null && item[valueKey] !== "") {
+    return Number(item[valueKey] || 0);
+  }
+
+  if (item[textKey]) {
+    return parseKoreanPowerValue(item[textKey]);
+  }
+
+  return Number(fallback || 0);
 }
 
 function buildSummary(members) {
