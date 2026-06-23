@@ -43,6 +43,7 @@ const refs = {
   editDialog: document.getElementById("edit-dialog"),
   openEditor: document.getElementById("open-editor"),
   openEditorGuide: document.getElementById("open-editor-guide"),
+  openActionsRefresh: document.getElementById("open-actions-refresh"),
   closeEditor: document.getElementById("close-editor"),
   passwordView: document.getElementById("password-view"),
   editorView: document.getElementById("editor-view"),
@@ -249,7 +250,7 @@ function render() {
   const selectedGuildText = state.guildFilter === "all" ? guilds.join(" · ") : state.guildFilter;
 
   refs.title.textContent = `${selectedGuildText || "길드"} 성장률 대시보드`;
-  refs.subtitle.textContent = `전투력 · 토벌전 현황 · ${data.capturedDate || "-"} 기준`;
+  refs.subtitle.textContent = `전투력 · 토벌전 현황 · ${data.capturedDate || "-"} 수집 / 7일 전 비교`;
 
   renderSummary();
   renderTable();
@@ -257,14 +258,49 @@ function render() {
   if (state.page !== "dashboard") return;
 
   const manualText = data.manualAppliedCount > 0 ? ` · 수동 보정 ${data.manualAppliedCount}건 포함` : "";
-  refs.footerText.textContent = `${selectedGuildText || "-"} 길드 내부 참고용 · ${data.capturedDate || "-"} 수집${manualText}`;
+  const comparisonText = getComparisonDateText(data, state.guildFilter);
+  refs.footerText.textContent = `${selectedGuildText || "-"} 길드 내부 참고용 · 현재 ${data.capturedDate || "-"} 수집 · 7일 전 비교 ${comparisonText}${manualText}`;
+}
+
+function getComparisonDateText(data, guildFilter) {
+  if (!data) return "-";
+  const comparisonDates = data.comparisonDates || {};
+
+  if (guildFilter && guildFilter !== "all") {
+    return comparisonDates[guildFilter] || `${data.comparisonTargetDate || "7일 전"} 데이터 없음`;
+  }
+
+  if (data.comparisonDateText) return data.comparisonDateText;
+
+  const dates = [...new Set(Object.values(comparisonDates).filter(Boolean))];
+  if (dates.length === 0) return `${data.comparisonTargetDate || "7일 전"} 데이터 없음`;
+  if (dates.length === 1) return dates[0];
+  return dates.join(" · ");
+}
+
+function openActionsRefresh() {
+  const url = getActionsWorkflowUrl();
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function getActionsWorkflowUrl() {
+  const host = window.location.hostname || "";
+  const firstPath = window.location.pathname.split("/").filter(Boolean)[0];
+
+  if (host.endsWith(".github.io") && firstPath) {
+    const owner = host.replace(".github.io", "");
+    return `https://github.com/${owner}/${firstPath}/actions/workflows/collect.yml`;
+  }
+
+  return "https://github.com/koiware2012/guild-tobeol-dashboard/actions/workflows/collect.yml";
 }
 
 function renderSummary() {
   const members = getGuildFilteredMembers();
   const summary = buildSummary(members);
   const cards = [
-    ["조회 길드", state.guildFilter === "all" ? `${summary.guildCount || 0}개` : state.guildFilter],
+    ["수집 기준", state.data?.capturedDate || "-"],
+    ["7일 전 기준", getComparisonDateText(state.data, state.guildFilter)],
     ["길드원", `${summary.memberCount || 0}명`],
     ["총 전투력", formatKoreanPower(summary.totalPowerValue || 0)],
     ["총 토벌전", formatKoreanPower(summary.totalTobeolValue || 0)]

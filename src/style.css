@@ -1017,3 +1017,14 @@ footer {
 .text-danger-btn:hover {
   background: rgba(255, 229, 234, 0.92);
 }
+
+.manual-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.manual-actions button {
+  white-space: nowrap;
+}

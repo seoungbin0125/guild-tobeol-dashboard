@@ -13,6 +13,7 @@ const DEFAULT_GUILD_NAMES = parseGuildNames(
 const DEFAULT_SERVER_ID = process.env.SERVER_ID || "4";
 const DEFAULT_TOBEOL_MAX_PAGE = Number(process.env.TOBEOL_MAX_PAGE || 10);
 const DEFAULT_MEMBER_LIMIT = Number(process.env.MEMBER_LIMIT || 30);
+const DEFAULT_COMPARE_OFFSET_DAYS = Number(process.env.COMPARE_OFFSET_DAYS || -7);
 
 const DATA_DIR = path.join(ROOT_DIR, "data");
 const LATEST_PATH = path.join(DATA_DIR, "latest.json");
@@ -26,12 +27,14 @@ async function run() {
   const maxPage = Number(args.maxPage || DEFAULT_TOBEOL_MAX_PAGE);
   const memberLimit = Number(args.memberLimit || DEFAULT_MEMBER_LIMIT);
   const today = kstDateString();
+  const compareOffsetDays = Number(args.compareOffsetDays || DEFAULT_COMPARE_OFFSET_DAYS);
+  const comparisonTargetDate = args.compareDate || kstDateString(compareOffsetDays);
 
   if (guildNames.length === 0) {
     throw new Error("수집할 길드명이 없습니다. GUILD_NAMES 또는 --guilds 값을 확인해주세요.");
   }
 
-  console.log(`🚀 길드 데이터 수집 시작: guilds=${guildNames.join(", ")}, server=${serverId}, date=${today}`);
+  console.log(`🚀 길드 데이터 수집 시작: guilds=${guildNames.join(", ")}, server=${serverId}, date=${today}, compare=${comparisonTargetDate}`);
 
   await fs.mkdir(DATA_DIR, { recursive: true });
 
@@ -75,9 +78,12 @@ async function run() {
 
   const history = await readJsonFile(HISTORY_PATH, []);
   const manual = await readJsonFile(MANUAL_PATH, null);
+  const previousSnapshotsByGuild = new Map(
+    guildNames.map((guild) => [guild, findWeeklySnapshot(history, comparisonTargetDate, guild)])
+  );
 
   const mergedMembers = guildResults.flatMap(({ guild, members }) => {
-    const previousSnapshot = findPreviousSnapshot(history, today, guild);
+    const previousSnapshot = previousSnapshotsByGuild.get(guild);
     const previousMemberMap = new Map(
       (previousSnapshot?.members || []).map((member) => [member.nickname, member])
     );
@@ -117,10 +123,17 @@ async function run() {
 
   const latest = {
     ok: true,
-    version: 2,
+    version: 4,
     guilds: guildNames,
     guild: guildNames.join(" · "),
     capturedDate: today,
+    comparisonMode: "weekly",
+    comparisonOffsetDays: compareOffsetDays,
+    comparisonTargetDate,
+    comparisonDates: Object.fromEntries(
+      guildNames.map((guild) => [guild, previousSnapshotsByGuild.get(guild)?.date || null])
+    ),
+    comparisonDateText: buildComparisonDateText(guildNames, previousSnapshotsByGuild, comparisonTargetDate),
     summary: buildSummary(mergedMembers),
     manualAppliedCount,
     guildSummaries: Object.fromEntries(
@@ -489,6 +502,15 @@ function manualValue(item, prefix, fallback) {
   return Number(fallback || 0);
 }
 
+function buildComparisonDateText(guildNames, previousSnapshotsByGuild, comparisonTargetDate) {
+  const entries = guildNames.map((guild) => {
+    const date = previousSnapshotsByGuild.get(guild)?.date || null;
+    return date ? `${guild}: ${date}` : `${guild}: ${comparisonTargetDate} 데이터 없음`;
+  });
+
+  return entries.join(" · ");
+}
+
 function buildSummary(members) {
   return {
     guildCount: new Set(members.map((member) => member.guild).filter(Boolean)).size,
@@ -498,10 +520,9 @@ function buildSummary(members) {
   };
 }
 
-function findPreviousSnapshot(history, today, guildName) {
+function findWeeklySnapshot(history, comparisonTargetDate, guildName) {
   return [...(Array.isArray(history) ? history : [])]
-    .filter((snapshot) => snapshot && snapshot.guild === guildName && snapshot.date < today)
-    .sort((a, b) => String(b.date).localeCompare(String(a.date)))[0] || null;
+    .find((snapshot) => snapshot && snapshot.guild === guildName && snapshot.date === comparisonTargetDate) || null;
 }
 
 function upsertHistoryList(history, todaySnapshots) {

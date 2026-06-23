@@ -137,3 +137,30 @@ GitHub Actions는 매일 KST 00:10에 자동 실행되도록 설정되어 있습
 data/latest.json
 data/history.json
 ```
+
+
+## Firebase 설정 주의
+
+`src/firebase-config.js` 파일에는 `FIREBASE_CONFIG`와 `FIREBASE_COLLECTION` 두 export가 모두 있어야 합니다. Firebase Console에서 복사한 초기화 코드 전체를 붙여넣지 말고 config 값만 `FIREBASE_CONFIG` 객체에 넣으세요.
+
+
+## 데이터 기준일과 수동 갱신
+
+- `수집 기준`: `data/latest.json`이 생성된 날짜입니다. 수집 스크립트는 한국 시간 기준 날짜를 사용합니다.
+- `7일 전 기준`: 현재 수집일 기준 정확히 7일 전 날짜의 `data/history.json` 스냅샷입니다. 예를 들어 `2026-06-23` 수집이면 `2026-06-16` 데이터를 비교합니다.
+- 정확히 7일 전 데이터가 없으면 성장률은 표시하지 않고 `7일 전 데이터 없음`으로 표시합니다.
+- 화면의 `데이터 수동 갱신` 버튼은 GitHub Actions의 `Collect Guild Data` 화면을 엽니다. GitHub에 로그인한 뒤 `Run workflow`를 누르면 즉시 수집됩니다.
+
+GitHub Actions 실패가 계속되면 `.github/workflows/collect.yml`이 아래처럼 되어 있는지 확인하세요.
+
+```yaml
+- name: Collect data
+  env:
+    GUILD_NAMES: 반짝,풍년순대국밥
+    SERVER_ID: "4"
+    TOBEOL_MAX_PAGE: "10"
+  run: npm run collect:all
+```
+
+예전 워크플로우가 `node scripts/collect-mgf.js`를 실행해도 동작하도록 호환 파일도 포함되어 있습니다.
+

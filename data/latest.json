@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "version": 3,
+  "version": 4,
   "guilds": [
     "반짝",
     "풍년순대국밥"
@@ -27,5 +27,13 @@
       "totalTobeolValue": 0
     }
   },
-  "members": []
+  "members": [],
+  "comparisonMode": "weekly",
+  "comparisonOffsetDays": -7,
+  "comparisonTargetDate": "2026-06-16",
+  "comparisonDates": {
+    "반짝": null,
+    "풍년순대국밥": null
+  },
+  "comparisonDateText": "반짝: 2026-06-16 데이터 없음 · 풍년순대국밥: 2026-06-16 데이터 없음"
 }
