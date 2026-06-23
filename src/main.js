@@ -1,3 +1,6 @@
+import { FIREBASE_COLLECTION, FIREBASE_CONFIG } from "./firebase-config.js";
+import { createGuideBoardClient, isFirebaseConfigured } from "./firebase-board.js";
+
 const EDIT_PASSWORD = "5645";
 const LOCAL_MANUAL_KEY = "guild-tobeol-dashboard.manual.v1";
 const LOCAL_POSTS_KEY = "guild-tobeol-dashboard.guide-posts.v1";
@@ -10,6 +13,10 @@ const state = {
   postsFromFile: null,
   localPosts: null,
   posts: [],
+  firebasePosts: [],
+  firebaseBoard: null,
+  boardMode: isFirebaseConfigured(FIREBASE_CONFIG) ? "firebase" : "local",
+  boardLoaded: false,
   page: "dashboard",
   tab: "power",
   guildFilter: "all",
@@ -61,7 +68,9 @@ const refs = {
   postList: document.getElementById("post-list"),
   downloadPosts: document.getElementById("download-posts"),
   importPosts: document.getElementById("import-posts"),
-  clearLocalPosts: document.getElementById("clear-local-posts")
+  clearLocalPosts: document.getElementById("clear-local-posts"),
+  boardStatus: document.getElementById("board-status"),
+  firebaseSetupNotice: document.getElementById("firebase-setup-notice")
 };
 
 init();
@@ -81,6 +90,7 @@ async function init() {
     state.localManual = readLocalManual();
     state.postsFromFile = normalizePosts(posts);
     state.localPosts = readLocalPosts();
+    initFirebaseBoard();
     rebuildPosts();
     rebuildData();
     initGuildFilter();
@@ -153,6 +163,7 @@ function bindEvents() {
   refs.downloadPosts?.addEventListener("click", downloadPosts);
   refs.importPosts?.addEventListener("change", importPostsFromFile);
   refs.clearLocalPosts?.addEventListener("click", clearLocalPosts);
+  refs.postList?.addEventListener("click", handlePostListClick);
 }
 
 function renderPage() {
@@ -169,7 +180,7 @@ function renderPage() {
     refs.title.textContent = "공략 게시판";
     refs.subtitle.textContent = "길드 공략을 작성하고 공유하는 공간";
     renderPosts();
-    refs.footerText.textContent = "공략글은 브라우저에 저장됩니다. 공유하려면 guide-posts.json을 커밋하세요.";
+    refs.footerText.textContent = state.boardMode === "firebase" ? "공략글은 실시간 게시판 서버에 저장됩니다." : "Firebase 설정 전이라 이 브라우저에만 임시 저장됩니다.";
     return;
   }
 
@@ -519,6 +530,53 @@ function clearLocalManual() {
 }
 
 
+
+function initFirebaseBoard() {
+  state.firebaseBoard = createGuideBoardClient({
+    config: FIREBASE_CONFIG,
+    collectionName: FIREBASE_COLLECTION,
+    onPosts: (posts) => {
+      state.firebasePosts = posts;
+      state.boardLoaded = true;
+      rebuildPosts();
+      if (state.page === "guide") renderPosts();
+    },
+    onError: (error) => {
+      console.error(error);
+      state.boardLoaded = true;
+      syncBoardUi("error", `게시판 연결 실패: ${error.message}`);
+      if (state.page === "guide") renderPosts();
+    },
+    onStatus: syncBoardUi
+  });
+
+  if (!state.firebaseBoard.enabled) {
+    state.boardMode = "local";
+    state.boardLoaded = true;
+  }
+}
+
+function syncBoardUi(status, message) {
+  if (refs.boardStatus) {
+    const mode = state.firebaseBoard?.enabled ? "online" : "local";
+    refs.boardStatus.className = `board-status ${status || mode}`;
+    refs.boardStatus.textContent = message || (mode === "online" ? "실시간 게시판 연결됨" : "Firebase 설정 전: 브라우저 임시 저장 모드");
+  }
+
+  if (refs.firebaseSetupNotice) {
+    refs.firebaseSetupNotice.hidden = Boolean(state.firebaseBoard?.enabled);
+  }
+
+  if (refs.importPosts) {
+    refs.importPosts.closest("label")?.classList.toggle("hidden", Boolean(state.firebaseBoard?.enabled));
+  }
+
+  if (refs.clearLocalPosts) {
+    refs.clearLocalPosts.textContent = state.firebaseBoard?.enabled ? "서버 게시글은 삭제 버튼으로 관리" : "내 임시글 초기화";
+    refs.clearLocalPosts.disabled = Boolean(state.firebaseBoard?.enabled);
+  }
+}
+
 function openPostEditor() {
   refs.postDialog.showModal();
   refs.postMessage.textContent = "";
@@ -529,7 +587,7 @@ function closePostEditor() {
   refs.postDialog.close();
 }
 
-function savePostFromForm() {
+async function savePostFromForm() {
   if (refs.postPassword.value !== EDIT_PASSWORD) {
     refs.postMessage.textContent = "비밀번호가 맞지 않습니다.";
     refs.postPassword.select();
@@ -555,13 +613,27 @@ function savePostFromForm() {
     createdAt: new Date().toISOString()
   };
 
-  const localPosts = normalizePosts(state.localPosts);
-  state.localPosts = [post, ...localPosts];
-  localStorage.setItem(LOCAL_POSTS_KEY, JSON.stringify({ posts: state.localPosts }));
-  rebuildPosts();
-  renderPosts();
-  refs.postMessage.textContent = "공략글을 저장했습니다. 전체 사용자에게 공유하려면 guide-posts.json을 다운로드해서 data/guide-posts.json으로 커밋하세요.";
-  resetPostForm(false);
+  refs.savePost.disabled = true;
+  refs.postMessage.textContent = state.boardMode === "firebase" ? "게시판 서버에 저장 중입니다..." : "브라우저에 임시 저장 중입니다...";
+
+  try {
+    if (state.firebaseBoard?.enabled) {
+      await state.firebaseBoard.addPost(post);
+      refs.postMessage.textContent = "공략글을 게시판 서버에 저장했습니다.";
+    } else {
+      const localPosts = normalizePosts(state.localPosts);
+      state.localPosts = [post, ...localPosts];
+      localStorage.setItem(LOCAL_POSTS_KEY, JSON.stringify({ posts: state.localPosts }));
+      rebuildPosts();
+      renderPosts();
+      refs.postMessage.textContent = "Firebase 설정 전이라 이 브라우저에만 임시 저장했습니다.";
+    }
+    resetPostForm(false);
+  } catch (error) {
+    refs.postMessage.textContent = `저장 실패: ${error.message}`;
+  } finally {
+    refs.savePost.disabled = false;
+  }
 }
 
 function resetPostForm(clearMessage = true) {
@@ -575,17 +647,31 @@ function resetPostForm(clearMessage = true) {
 
 function rebuildPosts() {
   const byId = new Map();
-  for (const post of [...normalizePosts(state.postsFromFile), ...normalizePosts(state.localPosts)]) {
+  const sources = state.firebaseBoard?.enabled
+    ? normalizePosts(state.firebasePosts)
+    : [...normalizePosts(state.postsFromFile), ...normalizePosts(state.localPosts)];
+
+  for (const post of sources) {
     if (!post.title || !post.content) continue;
     const id = post.id || `${post.title}-${post.createdAt || ""}`;
     byId.set(id, { ...post, id });
   }
 
   state.posts = [...byId.values()].sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  syncBoardUi();
 }
 
 function renderPosts() {
   if (!refs.postList) return;
+
+  if (state.firebaseBoard?.enabled && !state.boardLoaded) {
+    refs.postList.innerHTML = `
+      <div class="empty board-empty">
+        게시판 서버에서 공략글을 불러오는 중입니다...
+      </div>
+    `;
+    return;
+  }
 
   if (!state.posts.length) {
     refs.postList.innerHTML = `
@@ -603,8 +689,12 @@ function renderPosts() {
         <span class="guild-pill">${escapeHtml(post.category || "기타")}</span>
         <span>${escapeHtml(post.author || "익명")}</span>
         <span>${formatPostDate(post.createdAt)}</span>
+        ${post.source === "firebase" ? `<span class="server-badge">실시간</span>` : `<span class="server-badge local">임시</span>`}
       </div>
-      <h3>${escapeHtml(post.title)}</h3>
+      <div class="post-title-row">
+        <h3>${escapeHtml(post.title)}</h3>
+        <button class="text-danger-btn" data-delete-post-id="${escapeAttr(post.id)}" type="button">삭제</button>
+      </div>
       <p>${escapeHtml(post.content).replace(/\n/g, "<br />")}</p>
     </article>
   `).join("");
@@ -636,11 +726,43 @@ async function importPostsFromFile(event) {
 }
 
 function clearLocalPosts() {
+  if (state.firebaseBoard?.enabled) return;
   if (!confirm("이 브라우저에 저장된 공략 임시글을 초기화할까요?")) return;
   localStorage.removeItem(LOCAL_POSTS_KEY);
   state.localPosts = null;
   rebuildPosts();
   renderPosts();
+}
+
+
+async function handlePostListClick(event) {
+  const button = event.target.closest("[data-delete-post-id]");
+  if (!button) return;
+
+  const id = button.dataset.deletePostId;
+  const password = prompt("삭제 비밀번호를 입력하세요.");
+  if (password !== EDIT_PASSWORD) {
+    alert("비밀번호가 맞지 않습니다.");
+    return;
+  }
+
+  if (!confirm("이 공략글을 삭제할까요?")) return;
+
+  try {
+    button.disabled = true;
+    if (state.firebaseBoard?.enabled) {
+      await state.firebaseBoard.deletePost(id);
+    } else {
+      state.localPosts = normalizePosts(state.localPosts).filter((post) => post.id !== id);
+      localStorage.setItem(LOCAL_POSTS_KEY, JSON.stringify({ posts: state.localPosts }));
+      rebuildPosts();
+      renderPosts();
+    }
+  } catch (error) {
+    alert(`삭제 실패: ${error.message}`);
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function readLocalPosts() {

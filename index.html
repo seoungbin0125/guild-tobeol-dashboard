@@ -84,13 +84,14 @@
         <article class="portal-card guide-write-card">
           <p class="eyebrow mini">Guide Board</p>
           <h2>공략 게시판</h2>
-          <p class="muted">공략글을 작성하면 현재 브라우저에 저장됩니다. 다른 사람에게도 보이게 하려면 <code>guide-posts.json</code>을 다운로드해서 GitHub의 <code>data/guide-posts.json</code>에 올려주세요.</p>
+          <p class="muted">공략글을 작성하면 게시판 서버에 바로 저장되고, 접속한 모든 사용자가 같은 글을 볼 수 있습니다.</p>
+          <div class="board-status" id="board-status">게시판 상태 확인 중...</div>
           <button class="primary-btn" id="open-post-editor" type="button">공략 작성하기</button>
         </article>
-        <article class="portal-card soft-card">
-          <p class="eyebrow mini">운영 방식</p>
-          <h3>정적 페이지 게시판 안내</h3>
-          <p class="muted">GitHub Pages는 서버 DB가 없어서 글 작성 내용이 자동으로 서버에 저장되지는 않습니다. 우선은 내부용으로 편하게 쓰도록 로컬 저장 + JSON 내보내기 방식으로 구성했습니다.</p>
+        <article class="portal-card soft-card" id="firebase-setup-notice">
+          <p class="eyebrow mini">Firebase Setup</p>
+          <h3>게시판 서버 설정 필요</h3>
+          <p class="muted"><code>src/firebase-config.js</code>에 Firebase Web App 설정값을 넣으면 실시간 게시판이 활성화됩니다. 설정 전에는 기존처럼 현재 브라우저에만 임시 저장됩니다.</p>
         </article>
       </section>
 
@@ -99,10 +100,10 @@
           <h2>공략 목록</h2>
           <div class="board-actions">
             <label class="secondary-btn file-label">
-              guide-posts.json 불러오기
+              JSON 백업 불러오기
               <input id="import-posts" type="file" accept="application/json" hidden />
             </label>
-            <button class="secondary-btn" id="download-posts" type="button">guide-posts.json 다운로드</button>
+            <button class="secondary-btn" id="download-posts" type="button">공략 백업 다운로드</button>
             <button class="danger-btn" id="clear-local-posts" type="button">내 임시글 초기화</button>
           </div>
         </div>
@@ -196,7 +197,7 @@
         <div>
           <p class="eyebrow mini">Write Guide</p>
           <h2>공략 작성</h2>
-          <p>비밀번호 <strong>5645</strong> 입력 후 공략을 작성할 수 있습니다.</p>
+          <p>비밀번호 <strong>5645</strong> 입력 후 공략을 작성할 수 있습니다. Firebase 설정이 완료되면 글은 실시간 게시판 서버에 저장됩니다.</p>
         </div>
         <button class="icon-btn" id="close-post-editor" type="button" aria-label="닫기">×</button>
       </div>

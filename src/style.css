@@ -947,3 +947,73 @@ footer {
     grid-template-columns: 1fr;
   }
 }
+
+.board-status {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin: 6px 0 16px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  color: #8a4a12;
+  background: rgba(255, 240, 199, 0.86);
+  border: 1px solid rgba(255, 159, 68, 0.34);
+  font-size: 13px;
+  font-weight: 1000;
+}
+
+.board-status.online,
+.board-status.connecting {
+  color: #087352;
+  background: rgba(217, 255, 235, 0.88);
+  border-color: rgba(14, 170, 115, 0.24);
+}
+
+.board-status.error {
+  color: #b82b46;
+  background: rgba(255, 229, 234, 0.90);
+  border-color: rgba(240, 78, 104, 0.24);
+}
+
+.server-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: #087352;
+  background: rgba(217, 255, 235, 0.88);
+  font-size: 12px;
+  font-weight: 1000;
+}
+
+.server-badge.local {
+  color: #8a4a12;
+  background: rgba(255, 240, 199, 0.86);
+}
+
+.post-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.post-title-row h3 {
+  flex: 1;
+}
+
+.text-danger-btn {
+  flex: 0 0 auto;
+  border: 1px solid rgba(240, 78, 104, 0.24);
+  border-radius: 999px;
+  color: #d43d59;
+  background: rgba(255, 255, 255, 0.74);
+  padding: 7px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 1000;
+}
+
+.text-danger-btn:hover {
+  background: rgba(255, 229, 234, 0.92);
+}

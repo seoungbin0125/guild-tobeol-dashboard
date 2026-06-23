@@ -1,6 +1,6 @@
 # 메키 길드 포털
 
-전투력/토벌전 현황, 공략 게시판, 주요 링크, 쉬어가기 게임 링크를 한 화면에서 볼 수 있는 GitHub Pages용 정적 사이트입니다.
+전투력/토벌전 현황, 실시간 공략 게시판, 주요 링크, 쉬어가기 게임 링크를 한 화면에서 볼 수 있는 GitHub Pages용 사이트입니다.
 
 ## 실행
 
@@ -24,6 +24,70 @@ http://localhost:8080
 | 링크 | 디스코드, 메키 단톡방 |
 | 쉬어가기 | 게임 1, 게임 2 |
 
+## 공략 게시판 서버 설정
+
+공략 게시판은 Firebase Firestore를 사용합니다. 설정을 넣기 전에는 기존처럼 현재 브라우저에만 임시 저장됩니다.
+
+### 1. Firebase 프로젝트 생성
+
+1. https://console.firebase.google.com 접속
+2. 프로젝트 생성
+3. `Build → Firestore Database` 선택
+4. 데이터베이스 생성
+5. 위치는 가까운 리전을 선택
+6. 테스트 모드로 시작해도 되고, 아래 Rules를 바로 넣어도 됩니다.
+
+### 2. Web App 추가
+
+1. Firebase 프로젝트 설정으로 이동
+2. `General → Your apps → Web app` 추가
+3. Firebase config 값을 복사
+4. 아래 파일에 붙여넣기
+
+```text
+src/firebase-config.js
+```
+
+예시:
+
+```js
+export const FIREBASE_CONFIG = {
+  apiKey: "...",
+  authDomain: "...firebaseapp.com",
+  projectId: "...",
+  storageBucket: "...appspot.com",
+  messagingSenderId: "...",
+  appId: "..."
+};
+```
+
+### 3. Firestore Rules 적용
+
+Firebase Console에서:
+
+```text
+Firestore Database → Rules
+```
+
+아래 파일 내용을 복사해서 붙여넣고 `Publish` 합니다.
+
+```text
+firestore.rules
+```
+
+> 현재 버전은 길드 내부용 초간단 게시판입니다. 화면에서는 비밀번호 `5645`를 확인하지만, 정적 사이트 특성상 진짜 서버 보안처럼 강한 보호는 아닙니다. 외부 공개 사이트로 운영하면서 관리자 보안이 필요하면 Firebase Authentication 방식으로 바꾸는 것을 권장합니다.
+
+## 공략 작성
+
+공략 탭에서 `공략 작성하기` 버튼을 누른 뒤 비밀번호를 입력합니다.
+
+```text
+5645
+```
+
+Firebase 설정이 완료된 경우 글은 Firestore에 저장되어 모든 접속자에게 바로 보입니다.
+Firebase 설정 전에는 현재 브라우저에만 임시 저장됩니다.
+
 ## 수동 입력
 
 현황 화면에서 `수동 입력하기` 또는 `수정하기` 버튼을 누른 뒤 비밀번호를 입력합니다.
@@ -44,23 +108,6 @@ http://localhost:8080
 ```text
 data/manual.json
 ```
-
-## 공략 게시판 작성
-
-공략 탭에서 `공략 작성하기` 버튼을 누른 뒤 비밀번호를 입력합니다.
-
-```text
-5645
-```
-
-작성한 공략은 우선 현재 브라우저에 저장됩니다.
-다른 사람에게도 보이게 하려면 `guide-posts.json 다운로드` 후 저장소의 아래 파일을 교체해서 커밋합니다.
-
-```text
-data/guide-posts.json
-```
-
-> GitHub Pages는 정적 페이지라서 서버 DB가 없습니다. 그래서 게시판은 로컬 저장 + JSON 내보내기 방식으로 구성되어 있습니다.
 
 ## 링크
 
