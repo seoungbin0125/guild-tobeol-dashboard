@@ -1,6 +1,6 @@
 {
   "name": "guild-tobeol-dashboard",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,9 @@
     "collect:banjjak": "GUILD_NAMES=반짝 SERVER_ID=4 TOBEOL_MAX_PAGE=10 node scripts/collect-data.js",
     "collect:sundae": "GUILD_NAMES=풍년순대국밥 SERVER_ID=4 TOBEOL_MAX_PAGE=10 node scripts/collect-data.js",
     "serve": "node scripts/serve.js",
-    "collect:contents": "GUILD_CONTENT_NAMES=반짝 node scripts/collect-guild-contents.js"
+    "collect:contents": "GUILD_CONTENT_NAMES=반짝 node scripts/collect-guild-contents.js",
+    "collect:hotdeals": "node scripts/collect-hotdeals.js",
+    "collect:all-data": "npm run collect:all && npm run collect:contents && npm run collect:hotdeals"
   },
   "devDependencies": {}
 }

@@ -12,13 +12,14 @@
       <div>
         <p class="eyebrow">Meki Guild Portal</p>
         <h1 id="title">메키 길드 포털</h1>
-        <p id="subtitle">전투력 · 토벌전 · 캐릭터 · 광장 · 길드 컨텐츠</p>
+        <p id="subtitle">전투력 · 토벌전 · 캐릭터 · 광장 · 길드 컨텐츠 · 핫딜</p>
       </div>
       <div class="hero-actions main-nav" aria-label="메인 메뉴">
         <button class="main-tab active" data-page="dashboard" type="button">현황</button>
         <button class="main-tab" data-page="characters" type="button">캐릭터</button>
         <button class="main-tab" data-page="virtual" type="button">광장</button>
         <button class="main-tab" data-page="contents" type="button">길드 컨텐츠</button>
+        <button class="main-tab" data-page="hotdeals" type="button">핫딜</button>
         <button class="main-tab" data-page="guide" type="button">공략</button>
         <button class="main-tab" data-page="links" type="button">링크</button>
         <button class="main-tab" data-page="rest" type="button">쉬어가기</button>
@@ -230,6 +231,22 @@
 
       <section class="contents-summary" id="contents-summary"></section>
       <section class="contents-grid" id="contents-grid" aria-label="길드 컨텐츠 매칭 목록"></section>
+    </section>
+
+    <section class="content-page" id="page-hotdeals">
+      <section class="hotdeal-hero">
+        <div>
+          <p class="eyebrow mini">Gift Card Deals</p>
+          <h2>기프트카드 할인 소식</h2>
+          <p class="muted">아카라이브 핫딜 게시판에서 기프트카드 키워드로 수집한 글을 보여줍니다. 마감 여부가 애매하면 최신 5개 기준으로 표시합니다.</p>
+        </div>
+        <div class="hotdeal-actions">
+          <a class="secondary-btn hotdeal-open-link" id="hotdeal-source-link" href="https://arca.live/b/hotdeal?target=all&amp;keyword=%EA%B8%B0%ED%94%84%ED%8A%B8%EC%B9%B4%EB%93%9C" target="_blank" rel="noopener noreferrer">원본 방 열기</a>
+        </div>
+      </section>
+
+      <section class="hotdeal-summary" id="hotdeal-summary"></section>
+      <section class="hotdeal-grid" id="hotdeal-grid" aria-label="기프트카드 할인 글 목록"></section>
     </section>
 
     <section class="content-page" id="page-guide">

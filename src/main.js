@@ -68,6 +68,7 @@ const state = {
   gameLastEatenAt: "",
   gameUserId: getOrCreateGameUserId(),
   guildContents: null,
+  hotdeals: null,
   contentsGuild: "반짝",
   contentsMode: "league",
   editorUnlocked: true
@@ -136,6 +137,9 @@ const refs = {
   contentsSourceLink: document.getElementById("contents-source-link"),
   contentsSummary: document.getElementById("contents-summary"),
   contentsGrid: document.getElementById("contents-grid"),
+  hotdealSummary: document.getElementById("hotdeal-summary"),
+  hotdealGrid: document.getElementById("hotdeal-grid"),
+  hotdealSourceLink: document.getElementById("hotdeal-source-link"),
   footerText: document.getElementById("footer-text"),
   editDialog: document.getElementById("edit-dialog"),
   openEditor: document.getElementById("open-editor"),
@@ -177,11 +181,12 @@ async function init() {
   bindEvents();
 
   try {
-    const [latest, manual, posts, guildContents] = await Promise.all([
+    const [latest, manual, posts, guildContents, hotdeals] = await Promise.all([
       fetchJson("data/latest.json", true),
       fetchJson("data/manual.json", false),
       fetchJson("data/guide-posts.json", false),
-      fetchJson("data/guild-contents.json", false)
+      fetchJson("data/guild-contents.json", false),
+      fetchJson("data/hotdeals.json", false)
     ]);
 
     state.rawData = latest;
@@ -190,6 +195,7 @@ async function init() {
     state.postsFromFile = normalizePosts(posts);
     state.localPosts = readLocalPosts();
     state.guildContents = normalizeGuildContents(guildContents);
+    state.hotdeals = normalizeHotdeals(hotdeals);
     initFirebaseBoard();
     initManualClient();
     rebuildPosts();
@@ -366,6 +372,11 @@ function renderPage() {
 
   if (state.page === "contents") {
     renderGuildContentsPage();
+    return;
+  }
+
+  if (state.page === "hotdeals") {
+    renderHotdealsPage();
     return;
   }
 
@@ -595,6 +606,123 @@ function makeGuildContentsUrl(mode, keyword) {
   return `https://mgf.gg/contents/guild.php?mode=${encodeURIComponent(mode || "league")}&stx=${encodeURIComponent(keyword || "반짝")}`;
 }
 
+
+function renderHotdealsPage() {
+  refs.title.textContent = "핫딜 알림";
+  refs.subtitle.textContent = "기프트카드 할인 글 최신 확인";
+
+  const bundle = state.hotdeals || normalizeHotdeals(null);
+  if (refs.hotdealSourceLink) refs.hotdealSourceLink.href = bundle.sourceUrl || makeHotdealUrl();
+
+  renderHotdealSummary(bundle);
+  renderHotdealGrid(bundle);
+
+  const count = (bundle.items || []).length;
+  const validCount = (bundle.items || []).filter((item) => item.status === "active").length;
+  refs.footerText.textContent = count
+    ? `기프트카드 핫딜 ${count}개 표시 · 유효 가능 ${validCount}개 · ${bundle.capturedAt || "수집일 미상"}`
+    : "기프트카드 핫딜 데이터가 아직 없습니다. npm run collect:hotdeals 실행 후 다시 확인하세요.";
+}
+
+function renderHotdealSummary(bundle) {
+  if (!refs.hotdealSummary) return;
+  const items = Array.isArray(bundle.items) ? bundle.items : [];
+  const activeCount = items.filter((item) => item.status === "active").length;
+  const fallbackCount = items.filter((item) => item.status === "unknown").length;
+  const latest = items[0];
+  refs.hotdealSummary.innerHTML = `
+    <article class="hotdeal-summary-card hotdeal-live">
+      <span>유효 가능</span>
+      <strong>${activeCount}개</strong>
+      <small>마감/종료 문구가 없는 글</small>
+    </article>
+    <article class="hotdeal-summary-card">
+      <span>최신 표시</span>
+      <strong>${items.length}개</strong>
+      <small>${fallbackCount ? "유효 여부 불명 글 포함" : "수집된 후보 글"}</small>
+    </article>
+    <article class="hotdeal-summary-card">
+      <span>최근 글</span>
+      <strong>${latest ? escapeHtml(latest.relativeTime || latest.dateText || "확인됨") : "없음"}</strong>
+      <small>${latest ? escapeHtml(latest.title || "-") : "수집 스크립트 실행 필요"}</small>
+    </article>
+  `;
+}
+
+function renderHotdealGrid(bundle) {
+  if (!refs.hotdealGrid) return;
+  const items = Array.isArray(bundle.items) ? bundle.items : [];
+  if (!items.length) {
+    refs.hotdealGrid.innerHTML = `
+      <article class="hotdeal-empty">
+        <strong>표시할 기프트카드 핫딜이 아직 없습니다.</strong>
+        <p>로컬이나 GitHub Actions에서 <code>npm run collect:hotdeals</code>를 실행하면 최신 5개가 <code>data/hotdeals.json</code>에 저장됩니다.</p>
+      </article>
+    `;
+    return;
+  }
+
+  refs.hotdealGrid.innerHTML = items.map((item, index) => renderHotdealCard(item, index)).join("");
+}
+
+function renderHotdealCard(item, index) {
+  const status = hotdealStatusMeta(item.status);
+  const price = item.priceText ? `<span>💳 ${escapeHtml(item.priceText)}</span>` : "";
+  const shop = item.shop ? `<span>🏪 ${escapeHtml(item.shop)}</span>` : "";
+  const date = item.relativeTime || item.dateText || item.createdAt || "시간 미상";
+  const badges = (item.badges || []).map((badge) => `<em>${escapeHtml(badge)}</em>`).join("");
+  const url = item.url || makeHotdealUrl();
+  return `
+    <article class="hotdeal-card ${item.status === "expired" ? "is-expired" : ""}">
+      <div class="hotdeal-card-top">
+        <span class="hotdeal-rank">#${index + 1}</span>
+        <span class="hotdeal-status ${escapeAttr(status.className)}">${escapeHtml(status.label)}</span>
+      </div>
+      <a class="hotdeal-title" href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title || "제목 없음")}</a>
+      <div class="hotdeal-meta">
+        <span>🕒 ${escapeHtml(date)}</span>
+        ${price}
+        ${shop}
+      </div>
+      ${badges ? `<div class="hotdeal-badges">${badges}</div>` : ""}
+      <p>${escapeHtml(item.reason || status.description)}</p>
+    </article>
+  `;
+}
+
+function hotdealStatusMeta(status) {
+  if (status === "active") {
+    return { label: "유효 가능", className: "active", description: "제목에 종료/품절 문구가 없어 아직 유효할 가능성이 있습니다." };
+  }
+  if (status === "expired") {
+    return { label: "마감 가능", className: "expired", description: "제목에 종료/품절/마감 계열 문구가 감지되었습니다." };
+  }
+  return { label: "최신 후보", className: "unknown", description: "유효 여부를 자동 확정할 수 없어 최신 글 후보로 표시합니다." };
+}
+
+function normalizeHotdeals(value) {
+  if (!value || !Array.isArray(value.items)) {
+    return {
+      capturedAt: "",
+      source: "arca.live 핫딜",
+      sourceUrl: makeHotdealUrl(),
+      keyword: "기프트카드",
+      items: []
+    };
+  }
+  return {
+    capturedAt: value.capturedAt || "",
+    source: value.source || "arca.live 핫딜",
+    sourceUrl: value.sourceUrl || makeHotdealUrl(value.keyword || "기프트카드"),
+    keyword: value.keyword || "기프트카드",
+    items: value.items.slice(0, 5)
+  };
+}
+
+function makeHotdealUrl(keyword = "기프트카드") {
+  return `https://arca.live/b/hotdeal?target=all&keyword=${encodeURIComponent(keyword)}`;
+}
+
 function initGamePicker() {
   if (!refs.gameCharacterSelect) return;
 
@@ -685,18 +813,23 @@ function getActionsWorkflowUrl() {
 function renderSummary() {
   const members = getGuildFilteredMembers();
   const summary = buildSummary(members);
+  const changes = getMemberChangeSummary(state.data, state.guildFilter);
   const cards = [
-    ["수집 기준", state.data?.capturedDate || "-"],
-    ["7일 전 기준", getComparisonDateText(state.data, state.guildFilter)],
-    ["길드원", `${summary.memberCount || 0}명`],
-    ["총 전투력", formatKoreanPower(summary.totalPowerValue || 0)],
-    ["총 토벌전", formatKoreanPower(summary.totalTobeolValue || 0)]
+    { label: "수집 기준", value: state.data?.capturedDate || "-", icon: "🗓️", tone: "soft" },
+    { label: "7일 전 기준", value: getComparisonDateText(state.data, state.guildFilter), icon: "⏪", tone: "soft" },
+    { label: "길드원", value: `${summary.memberCount || 0}명`, icon: "👥", tone: "primary" },
+    { label: "신규/탈퇴", value: `+${changes.newCount || 0} / -${changes.departedCount || 0}`, icon: "✨", tone: "accent" },
+    { label: "총 전투력", value: formatKoreanPower(summary.totalPowerValue || 0), icon: "⚡", tone: "featured" },
+    { label: "총 토벌전", value: formatKoreanPower(summary.totalTobeolValue || 0), icon: "🏹", tone: "featured" }
   ];
 
-  refs.summaryGrid.innerHTML = cards.map(([label, value]) => `
-    <article class="summary-card">
-      <div class="label">${escapeHtml(label)}</div>
-      <div class="value">${escapeHtml(value)}</div>
+  refs.summaryGrid.innerHTML = cards.map((card) => `
+    <article class="summary-card summary-card-${card.tone}">
+      <div class="summary-card-top">
+        <span class="summary-icon" aria-hidden="true">${card.icon}</span>
+        <div class="label">${escapeHtml(card.label)}</div>
+      </div>
+      <div class="value">${escapeHtml(card.value)}</div>
     </article>
   `).join("");
 }
@@ -807,6 +940,7 @@ function renderCharacterCard(member, index, max) {
   const imageUrl = getCharacterImageUrl(member.nickname);
   const rank = member.rank ? `#${member.rank}` : `#${index + 1}`;
   const manualBadge = member.isManual ? `<span class="manual-badge">수동</span>` : "";
+  const statusBadge = renderMemberStatusBadge(member);
   const powerGrowth = member.powerGrowthValue == null ? null : Number(member.powerGrowthValue);
   const tobeolGrowth = member.tobeolGrowthValue == null ? null : Number(member.tobeolGrowthValue);
 
@@ -821,7 +955,7 @@ function renderCharacterCard(member, index, max) {
           <span class="badge">${escapeHtml(rank)}</span>
           ${renderGuild(member)}
         </div>
-        <h3>${escapeHtml(member.nickname || "-")} ${manualBadge}</h3>
+        <h3>${escapeHtml(member.nickname || "-")} ${manualBadge} ${statusBadge}</h3>
         <p>${escapeHtml(member.job || "-")} · Lv.${escapeHtml(member.level || "-")}</p>
       </div>
       <div class="character-bars">
@@ -2262,10 +2396,28 @@ function renderGuild(member) {
 
 function renderName(member) {
   const manualBadge = member.isManual ? `<span class="manual-badge">수동</span>` : "";
+  const statusBadge = renderMemberStatusBadge(member);
   return `
-    <div class="nickname">${escapeHtml(member.nickname)} ${manualBadge}</div>
+    <div class="nickname">${escapeHtml(member.nickname)} ${manualBadge} ${statusBadge}</div>
     <div class="muted">${escapeHtml(member.job || "-")}</div>
   `;
+}
+
+function renderMemberStatusBadge(member) {
+  if (member?.memberStatus === "new") return `<span class="status-badge new">신규</span>`;
+  if (member?.memberStatus === "departed") return `<span class="status-badge departed">탈퇴</span>`;
+  return "";
+}
+
+function getMemberChangeSummary(data, guildFilter) {
+  const changes = data?.memberChanges || {};
+  const guilds = guildFilter && guildFilter !== "all" ? [guildFilter] : getGuildsFromData(data);
+  return guilds.reduce((acc, guild) => {
+    const item = changes[guild] || {};
+    acc.newCount += Number(item.newCount || 0);
+    acc.departedCount += Number(item.departedCount || 0);
+    return acc;
+  }, { newCount: 0, departedCount: 0 });
 }
 
 function renderGrowth(value, text) {
@@ -3064,21 +3216,25 @@ function renderMemberCard(member, index) {
   const rateValue = isTobeol ? renderRate(member.tobeolGrowthRate) : renderRate(member.powerGrowthRate);
   const rank = member.rank ? `#${escapeHtml(member.rank)}` : `#${index + 1}`;
   const manualBadge = member.isManual ? `<span class="manual-badge">수동</span>` : "";
+  const statusBadge = renderMemberStatusBadge(member);
 
   return `
     <article class="member-card ${member.isManual ? "manual-card" : ""}">
-      <div class="member-card-top">
-        <div>
-          <div class="member-name">${escapeHtml(member.nickname || "-")} ${manualBadge}</div>
-          <div class="member-sub">${escapeHtml(member.job || "-")} · Lv.${escapeHtml(member.level || "-")}</div>
-        </div>
-        <div class="member-rank">
-          <span>${rank}</span>
+      <div class="member-card-head">
+        <div class="member-badges">
+          <span class="member-rank-chip">${rank}</span>
           ${renderGuild(member)}
         </div>
+        <div class="member-name-block">
+          <div class="member-name">${escapeHtml(member.nickname || "-")} ${manualBadge} ${statusBadge}</div>
+          <div class="member-sub">${escapeHtml(member.job || "-")} · Lv.${escapeHtml(member.level || "-")}</div>
+        </div>
+        <div class="member-highlight">
+          <span>${escapeHtml(currentLabel)}</span>
+          <strong>${escapeHtml(currentValue)}</strong>
+        </div>
       </div>
-      <div class="member-metrics">
-        ${renderMetric(currentLabel, escapeHtml(currentValue))}
+      <div class="member-metrics compact">
         ${renderMetric(previousLabel, escapeHtml(previousValue))}
         ${renderMetric("성장", growthValue)}
         ${renderMetric("성장률", rateValue)}

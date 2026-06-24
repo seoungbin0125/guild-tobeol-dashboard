@@ -12,7 +12,7 @@ const DEFAULT_GUILD_NAMES = parseGuildNames(
 );
 const DEFAULT_SERVER_ID = process.env.SERVER_ID || "4";
 const DEFAULT_TOBEOL_MAX_PAGE = Number(process.env.TOBEOL_MAX_PAGE || 10);
-const DEFAULT_MEMBER_LIMIT = Number(process.env.MEMBER_LIMIT || 30);
+const DEFAULT_MEMBER_LIMIT = Number(process.env.MEMBER_LIMIT || 100);
 const DEFAULT_COMPARE_OFFSET_DAYS = Number(process.env.COMPARE_OFFSET_DAYS || -7);
 
 const DATA_DIR = path.join(ROOT_DIR, "data");
@@ -82,11 +82,29 @@ async function run() {
     guildNames.map((guild) => [guild, findWeeklySnapshot(history, comparisonTargetDate, guild)])
   );
 
+  const departedMembersByGuild = {};
+
   const mergedMembers = guildResults.flatMap(({ guild, members }) => {
     const previousSnapshot = previousSnapshotsByGuild.get(guild);
+    const previousMembers = previousSnapshot?.members || [];
     const previousMemberMap = new Map(
-      (previousSnapshot?.members || []).map((member) => [member.nickname, member])
+      previousMembers.map((member) => [member.nickname, member])
     );
+    const currentNicknameSet = new Set(members.map((member) => member.nickname));
+
+    departedMembersByGuild[guild] = previousMembers
+      .filter((member) => member?.nickname && !currentNicknameSet.has(member.nickname))
+      .map((member) => ({
+        guild,
+        nickname: member.nickname,
+        rank: member.rank ?? null,
+        job: member.job || "",
+        level: member.level ?? null,
+        powerValue: member.powerValue ?? null,
+        powerText: member.powerValue == null ? null : formatKoreanPower(member.powerValue),
+        tobeolValue: member.tobeolValue ?? null,
+        tobeolText: member.tobeolValue == null ? null : formatKoreanPower(member.tobeolValue)
+      }));
 
     return members.map((member) => {
       const nickname = member.nickname;
@@ -94,9 +112,11 @@ async function run() {
       const previous = previousMemberMap.get(nickname) || null;
       const powerGrowthValue = previous ? member.powerValue - Number(previous.powerValue || 0) : null;
       const tobeolGrowthValue = previous ? currentTobeolValue - Number(previous.tobeolValue || 0) : null;
+      const memberStatus = previous ? "existing" : "new";
 
       return {
         guild,
+        memberStatus,
         rank: member.rank,
         nickname,
         job: member.job,
@@ -136,6 +156,8 @@ async function run() {
     comparisonDateText: buildComparisonDateText(guildNames, previousSnapshotsByGuild, comparisonTargetDate),
     summary: buildSummary(mergedMembers),
     manualAppliedCount,
+    memberChanges: buildMemberChanges(guildNames, mergedMembers, departedMembersByGuild),
+    departedMembers: Object.values(departedMembersByGuild).flat(),
     guildSummaries: Object.fromEntries(
       guildNames.map((guild) => [
         guild,
@@ -229,7 +251,7 @@ function parseGuildMembersFromText(textContent) {
 
   const members = [];
   const seen = new Set();
-  const blockRegex = /(?:^|\s)(\d{1,2})\s+([\s\S]*?)(?=\s+\d{1,2}\s+\S+|$)/g;
+  const blockRegex = /(?:^|\s)(\d{1,3})\s+([\s\S]*?)(?=\s+\d{1,3}\s+\S+|$)/g;
   let match;
 
   while ((match = blockRegex.exec(section)) !== null) {
@@ -530,6 +552,34 @@ function manualValue(item, prefix, fallback) {
   return fallback == null ? null : Number(fallback || 0);
 }
 
+
+function buildMemberChanges(guildNames, members, departedMembersByGuild) {
+  const result = {};
+  for (const guild of guildNames) {
+    const guildMembers = members.filter((member) => member.guild === guild);
+    const newMembers = guildMembers
+      .filter((member) => member.memberStatus === "new")
+      .map((member) => ({
+        guild,
+        nickname: member.nickname,
+        rank: member.rank ?? null,
+        job: member.job || "",
+        level: member.level ?? null,
+        powerValue: member.powerValue ?? null,
+        powerText: member.powerText || null,
+        tobeolValue: member.tobeolValue ?? null,
+        tobeolText: member.tobeolText || null
+      }));
+
+    result[guild] = {
+      newCount: newMembers.length,
+      departedCount: (departedMembersByGuild[guild] || []).length,
+      newMembers,
+      departedMembers: departedMembersByGuild[guild] || []
+    };
+  }
+  return result;
+}
 
 function buildComparisonDateText(guildNames, previousSnapshotsByGuild, comparisonTargetDate) {
   const entries = guildNames.map((guild) => {
