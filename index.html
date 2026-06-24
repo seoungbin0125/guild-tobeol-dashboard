@@ -12,12 +12,13 @@
       <div>
         <p class="eyebrow">Meki Guild Portal</p>
         <h1 id="title">메키 길드 포털</h1>
-        <p id="subtitle">전투력 · 토벌전 · 공략 · 링크 · 쉬어가기</p>
+        <p id="subtitle">전투력 · 토벌전 · 캐릭터 · 광장 · 게임</p>
       </div>
       <div class="hero-actions main-nav" aria-label="메인 메뉴">
         <button class="main-tab active" data-page="dashboard" type="button">현황</button>
         <button class="main-tab" data-page="characters" type="button">캐릭터</button>
         <button class="main-tab" data-page="virtual" type="button">광장</button>
+        <button class="main-tab" data-page="game" type="button">게임</button>
         <button class="main-tab" data-page="guide" type="button">공략</button>
         <button class="main-tab" data-page="links" type="button">링크</button>
         <button class="main-tab" data-page="rest" type="button">쉬어가기</button>
@@ -193,6 +194,97 @@
             <input id="virtual-chat-input" type="text" maxlength="120" placeholder="메시지 입력" disabled />
             <button class="primary-btn" id="virtual-chat-send" type="button" disabled>전송</button>
           </div>
+        </aside>
+      </section>
+    </section>
+
+
+    <section class="content-page" id="page-game">
+      <section class="game-layout">
+        <article class="game-card game-intro">
+          <p class="eyebrow mini">Guild Jelly Battle</p>
+          <h2>메키 젤리난투</h2>
+          <p class="muted">길드 캐릭터를 동그란 젤리로 조종해서 먹이를 먹고, 나보다 작은 상대를 흡수하는 짧고 빠른 난투 게임입니다.</p>
+          <div class="game-status" id="game-status">게임 서버 연결 확인 중...</div>
+
+          <label class="virtual-picker">
+            캐릭터 선택
+            <select id="game-character-select"></select>
+          </label>
+
+          <label class="virtual-picker">
+            팀 선택
+            <select id="game-team-select">
+              <option value="solo">개인전 · 전부 적</option>
+              <option value="blue">파랑팀 · 같은 팀 보호</option>
+              <option value="violet">보라팀 · 같은 팀 보호</option>
+              <option value="green">초록팀 · 같은 팀 보호</option>
+              <option value="orange">주황팀 · 같은 팀 보호</option>
+            </select>
+          </label>
+
+          <div class="game-selected">
+            <strong id="game-selected-name">캐릭터 선택 전</strong>
+            <div>
+              <span>질량 <b id="game-mass">-</b></span>
+              <span>점수 <b id="game-score">-</b></span>
+            </div>
+          </div>
+
+          <div class="virtual-actions">
+            <button class="primary-btn" id="game-start" type="button">게임 시작</button>
+            <button class="secondary-btn" id="game-reset" type="button">작게 리스폰</button>
+            <button class="danger-btn" id="game-leave" type="button" disabled>나가기</button>
+          </div>
+
+          <div class="game-rules">
+            <strong>룰</strong>
+            <p>먹이는 바로 점수가 됩니다. 상대보다 약 15% 이상 크면 흡수할 수 있고, 같은 팀은 먹을 수 없습니다.</p>
+          </div>
+        </article>
+
+        <section class="game-arena-card">
+          <div class="game-stage-top">
+            <div>
+              <p class="eyebrow mini">Mini User Map</p>
+              <h2>젤리 아레나</h2>
+            </div>
+            <span class="online-pill">참여 <strong id="game-alive-count">0명</strong></span>
+          </div>
+
+          <div class="game-arena" id="game-arena" tabindex="0" aria-label="젤리난투 게임장">
+            <div class="game-grid"></div>
+            <div class="game-food-layer" id="game-food-layer"></div>
+            <div class="game-player-layer" id="game-player-layer"></div>
+            <div class="game-target" id="game-target"></div>
+            <p class="game-hint" id="game-hint">캐릭터와 팀을 고른 뒤 게임을 시작하세요.</p>
+          </div>
+
+          <div class="game-controls" aria-label="젤리 이동 버튼">
+            <span></span>
+            <button type="button" data-game-move="up">▲</button>
+            <span></span>
+            <button type="button" data-game-move="left">◀</button>
+            <button type="button" data-game-move="down">▼</button>
+            <button type="button" data-game-move="right">▶</button>
+          </div>
+        </section>
+
+        <aside class="game-board-panel">
+          <div class="panel-header compact">
+            <div>
+              <h2>실시간 랭킹</h2>
+              <p>질량과 점수가 높을수록 위에 표시됩니다.</p>
+            </div>
+          </div>
+          <div class="game-scoreboard" id="game-scoreboard"></div>
+          <div class="panel-header compact game-log-title">
+            <div>
+              <h2>난투 로그</h2>
+              <p>먹고 먹힌 순간이 기록됩니다.</p>
+            </div>
+          </div>
+          <div class="game-event-log" id="game-event-log"></div>
         </aside>
       </section>
     </section>

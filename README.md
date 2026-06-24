@@ -1,6 +1,6 @@
 # 메키 길드 포털
 
-전투력/토벌전 현황, 캐릭터 모아보기, 버츄얼 광장, 실시간 공략 게시판, 주요 링크, 쉬어가기 게임 링크를 한 화면에서 볼 수 있는 GitHub Pages용 사이트입니다.
+전투력/토벌전 현황, 캐릭터 모아보기, 버츄얼 광장, 길드 미니게임, 실시간 공략 게시판, 주요 링크, 쉬어가기 게임 링크를 한 화면에서 볼 수 있는 GitHub Pages용 사이트입니다.
 
 ## 실행
 
@@ -22,6 +22,7 @@ http://localhost:8080
 | 현황 | 전투력 / 토벌전 현황과 성장률 |
 | 캐릭터 | MGF 캐릭터 이미지와 전투력/토벌전 변화량 카드 |
 | 광장 | 캐릭터 선택, 이동, 실시간 채팅이 가능한 버츄얼 광장 |
+| 게임 | 캐릭터 선택 후 먹이를 먹고 작은 상대를 흡수하는 젤리난투 |
 | 공략 | 공략 게시판 작성/조회 |
 | 링크 | 디스코드, 메키 단톡방 |
 | 쉬어가기 | 게임 1, 게임 2 |
@@ -71,7 +72,7 @@ Firebase Console에서:
 Firestore Database → Rules
 ```
 
-아래 파일 내용을 복사해서 붙여넣고 `Publish` 합니다. 이 Rules에는 공략 게시판(`guidePosts`), 현재/7일 전 기준값 수동 보정(`weeklyOverrides`), 버츄얼 광장(`virtualLobby`) 권한이 함께 들어 있습니다.
+아래 파일 내용을 복사해서 붙여넣고 `Publish` 합니다. 이 Rules에는 공략 게시판(`guidePosts`), 현재/7일 전 기준값 수동 보정(`weeklyOverrides`), 버츄얼 광장(`virtualLobby`), 젤리난투(`jellyGame`) 권한이 함께 들어 있습니다.
 
 ```text
 firestore.rules
@@ -119,6 +120,21 @@ Firebase 설정 전에는 현재 브라우저에만 임시 저장됩니다.
 - Firebase Firestore Rules를 배포하면 다른 접속자와 위치/채팅이 실시간으로 공유됩니다.
 - Firebase 연결 전에는 이 브라우저에서만 보이는 데모 모드로 동작합니다.
 
+
+## 메키 젤리난투
+
+게임 탭에는 길드 캐릭터 이미지로 플레이하는 간단한 아가리오 스타일 미니게임이 들어 있습니다.
+
+- 캐릭터와 팀을 고른 뒤 `게임 시작`을 누릅니다.
+- 게임장을 클릭/터치하면 해당 위치로 이동합니다.
+- 방향키, WASD, 화면 방향 버튼으로도 이동할 수 있습니다.
+- 먹이를 먹으면 질량과 점수가 올라갑니다.
+- 상대보다 약 15% 이상 크면 흡수할 수 있습니다.
+- `개인전`은 모두 적이고, 파랑/보라/초록/주황팀은 같은 팀끼리 서로 먹을 수 없습니다.
+- 먹히면 작게 리스폰되고 몇 초 동안 보호 상태가 됩니다.
+- Firebase Firestore Rules를 배포하면 여러 접속자가 실시간으로 같은 아레나에서 보입니다. 사람이 적을 때는 봇이 함께 나와서 바로 연습할 수 있습니다.
+- Firebase 연결 전에는 이 브라우저에서만 봇과 플레이하는 데모 모드로 동작합니다.
+
 ## 링크
 
 링크 탭에 아래 링크가 포함되어 있습니다.
@@ -151,7 +167,7 @@ data/history.json
 
 ## Firebase 설정 주의
 
-`src/firebase-config.js` 파일에는 `FIREBASE_CONFIG`, `FIREBASE_COLLECTION`, `FIREBASE_MANUAL_COLLECTION`, `FIREBASE_LOBBY_COLLECTION` export가 모두 있어야 합니다. Firebase Console에서 복사한 초기화 코드 전체를 붙여넣지 말고 config 값만 `FIREBASE_CONFIG` 객체에 넣으세요.
+`src/firebase-config.js` 파일에는 `FIREBASE_CONFIG`, `FIREBASE_COLLECTION`, `FIREBASE_MANUAL_COLLECTION`, `FIREBASE_LOBBY_COLLECTION`, `FIREBASE_GAME_COLLECTION` export가 모두 있어야 합니다. Firebase Console에서 복사한 초기화 코드 전체를 붙여넣지 말고 config 값만 `FIREBASE_CONFIG` 객체에 넣으세요.
 
 
 ## 데이터 기준일과 수동 갱신

@@ -1,11 +1,13 @@
-import { FIREBASE_COLLECTION, FIREBASE_CONFIG, FIREBASE_LOBBY_COLLECTION, FIREBASE_MANUAL_COLLECTION } from "./firebase-config.js";
-import { createGuideBoardClient, createManualOverrideClient, createVirtualLobbyClient, isFirebaseConfigured } from "./firebase-board.js";
+import { FIREBASE_COLLECTION, FIREBASE_CONFIG, FIREBASE_GAME_COLLECTION, FIREBASE_LOBBY_COLLECTION, FIREBASE_MANUAL_COLLECTION } from "./firebase-config.js";
+import { createGuideBoardClient, createJellyGameClient, createManualOverrideClient, createVirtualLobbyClient, isFirebaseConfigured } from "./firebase-board.js";
 
 const EDIT_PASSWORD = "5645";
 const LOCAL_MANUAL_KEY = "guild-tobeol-dashboard.manual.v1";
 const LOCAL_POSTS_KEY = "guild-tobeol-dashboard.guide-posts.v1";
 const LOCAL_VIRTUAL_KEY = "guild-tobeol-dashboard.virtual-user.v1";
 const LOCAL_CHAT_KEY = "guild-tobeol-dashboard.virtual-chat.v1";
+const LOCAL_GAME_KEY = "guild-tobeol-dashboard.jelly-user.v1";
+const LOCAL_GAME_EVENTS_KEY = "guild-tobeol-dashboard.jelly-events.v1";
 
 const state = {
   rawData: null,
@@ -38,6 +40,24 @@ const state = {
   virtualPosition: { x: 50, y: 54 },
   virtualStatus: "",
   virtualUserId: getOrCreateVirtualUserId(),
+  gameSelectedKey: "",
+  gameTeam: "solo",
+  gameJoined: false,
+  gameClient: null,
+  gamePlayers: [],
+  gameEvents: [],
+  gameFood: [],
+  gameBots: [],
+  gamePosition: { x: 50, y: 52 },
+  gameTarget: null,
+  gameMass: 22,
+  gameScore: 0,
+  gameStatus: "",
+  gameLastSyncAt: 0,
+  gameLoopTimer: null,
+  gameSafeUntil: 0,
+  gameLastEatenAt: "",
+  gameUserId: getOrCreateGameUserId(),
   editorUnlocked: true
 };
 
@@ -78,6 +98,24 @@ const refs = {
   virtualChatInput: document.getElementById("virtual-chat-input"),
   virtualChatSend: document.getElementById("virtual-chat-send"),
   virtualNudgeButtons: document.querySelectorAll("[data-virtual-move]"),
+  gameStatus: document.getElementById("game-status"),
+  gameCharacterSelect: document.getElementById("game-character-select"),
+  gameTeamSelect: document.getElementById("game-team-select"),
+  gameStart: document.getElementById("game-start"),
+  gameLeave: document.getElementById("game-leave"),
+  gameReset: document.getElementById("game-reset"),
+  gameArena: document.getElementById("game-arena"),
+  gameFoodLayer: document.getElementById("game-food-layer"),
+  gamePlayerLayer: document.getElementById("game-player-layer"),
+  gameTarget: document.getElementById("game-target"),
+  gameHint: document.getElementById("game-hint"),
+  gameAliveCount: document.getElementById("game-alive-count"),
+  gameScoreboard: document.getElementById("game-scoreboard"),
+  gameEventLog: document.getElementById("game-event-log"),
+  gameSelectedName: document.getElementById("game-selected-name"),
+  gameMass: document.getElementById("game-mass"),
+  gameScore: document.getElementById("game-score"),
+  gameNudgeButtons: document.querySelectorAll("[data-game-move]"),
   footerText: document.getElementById("footer-text"),
   editDialog: document.getElementById("edit-dialog"),
   openEditor: document.getElementById("open-editor"),
@@ -137,7 +175,11 @@ async function init() {
     initGuildFilter();
     initVisualFilters();
     initVirtualPicker();
+    initGamePicker();
+    initGameFood();
+    initGameBots();
     initVirtualLobbyClient();
+    initJellyGameClient();
     renderPage();
   } catch (error) {
     refs.tableBody.innerHTML = `<tr><td colspan="99" class="empty">${escapeHtml(error.message)}</td></tr>`;
@@ -222,9 +264,28 @@ function bindEvents() {
   refs.virtualNudgeButtons?.forEach((button) => {
     button.addEventListener("click", () => nudgeVirtualAvatar(button.dataset.virtualMove));
   });
+  refs.gameCharacterSelect?.addEventListener("change", (event) => {
+    state.gameSelectedKey = event.target.value;
+    if (state.gameJoined) startJellyGame(true);
+    renderGamePage();
+  });
+  refs.gameTeamSelect?.addEventListener("change", (event) => {
+    state.gameTeam = event.target.value;
+    if (state.gameJoined) syncGamePlayer(true);
+    renderGamePage();
+  });
+  refs.gameStart?.addEventListener("click", () => startJellyGame(false));
+  refs.gameLeave?.addEventListener("click", leaveJellyGame);
+  refs.gameReset?.addEventListener("click", resetJellySelf);
+  refs.gameArena?.addEventListener("pointerdown", handleGameArenaPointer);
+  refs.gameNudgeButtons?.forEach((button) => {
+    button.addEventListener("click", () => nudgeJellyPlayer(button.dataset.gameMove));
+  });
   document.addEventListener("keydown", handleVirtualKeydown);
+  document.addEventListener("keydown", handleGameKeydown);
   window.addEventListener("beforeunload", () => {
     if (state.virtualJoined && state.virtualClient?.enabled) state.virtualClient.leave(state.virtualUserId);
+    if (state.gameJoined && state.gameClient?.enabled) state.gameClient.leave(state.gameUserId);
   });
 
   refs.openEditor?.addEventListener("click", openEditor);
@@ -267,6 +328,11 @@ function renderPage() {
 
   if (state.page === "virtual") {
     renderVirtualPage();
+    return;
+  }
+
+  if (state.page === "game") {
+    renderGamePage();
     return;
   }
 
@@ -350,6 +416,27 @@ function initVirtualPicker() {
     <option value="${escapeAttr(virtualMemberKey(member))}">${escapeHtml(member.guild || "-")} · ${escapeHtml(member.nickname || "-")} · ${escapeHtml(member.job || "-")}</option>
   `).join("");
   refs.virtualCharacterSelect.value = state.virtualSelectedKey;
+}
+
+
+function initGamePicker() {
+  if (!refs.gameCharacterSelect) return;
+
+  const members = [...(state.data?.members || [])].sort((a, b) => {
+    const guildCompare = String(a.guild || "").localeCompare(String(b.guild || ""), "ko");
+    if (guildCompare) return guildCompare;
+    return Number(a.rank || 9999) - Number(b.rank || 9999);
+  });
+
+  if (!state.gameSelectedKey && members[0]) {
+    state.gameSelectedKey = virtualMemberKey(members[0]);
+  }
+
+  refs.gameCharacterSelect.innerHTML = members.map((member) => `
+    <option value="${escapeAttr(virtualMemberKey(member))}">${escapeHtml(member.guild || "-")} · ${escapeHtml(member.nickname || "-")} · ${escapeHtml(member.job || "-")}</option>
+  `).join("");
+  refs.gameCharacterSelect.value = state.gameSelectedKey;
+  if (refs.gameTeamSelect) refs.gameTeamSelect.value = state.gameTeam;
 }
 
 function getGuilds() {
@@ -989,6 +1076,647 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, Number(value || 0)));
 }
 
+
+function initGameFood() {
+  if (state.gameFood.length) return;
+  state.gameFood = createGameFood(72);
+}
+
+function initGameBots() {
+  const members = [...(state.data?.members || [])]
+    .sort((a, b) => Number(b.powerValue || 0) - Number(a.powerValue || 0))
+    .slice(0, 8);
+
+  state.gameBots = members.map((member, index) => ({
+    userId: `bot-${index}`,
+    memberKey: virtualMemberKey(member),
+    nickname: member.nickname,
+    guild: member.guild,
+    job: member.job,
+    team: ["solo", "blue", "violet", "green", "orange"][index % 5],
+    x: [18, 36, 58, 76, 28, 66, 48, 82][index] || randomGamePosition().x,
+    y: [24, 66, 34, 72, 46, 22, 80, 42][index] || randomGamePosition().y,
+    mass: 18 + index * 5,
+    score: index * 80,
+    vx: (Math.random() - 0.5) * 1.2,
+    vy: (Math.random() - 0.5) * 1.2,
+    lastSeen: new Date().toISOString(),
+    member,
+    isBot: true
+  }));
+}
+
+function initJellyGameClient() {
+  state.gameEvents = readLocalGameEvents();
+  state.gameClient = createJellyGameClient({
+    config: FIREBASE_CONFIG,
+    collectionName: FIREBASE_GAME_COLLECTION,
+    onPlayers: (players) => {
+      state.gamePlayers = players;
+      syncLocalJellyFromServer(players);
+      if (state.page === "game") renderGamePage();
+    },
+    onEvents: (events) => {
+      state.gameEvents = events;
+      if (state.page === "game") renderGameEventLog();
+    },
+    onStatus: (status, message) => {
+      state.gameStatus = message || status || "";
+      if (state.page === "game") renderGameStatus();
+    },
+    onError: (error) => {
+      console.error(error);
+      state.gameStatus = `게임 연결 실패: ${error.message}`;
+      if (state.page === "game") renderGameStatus();
+    }
+  });
+
+  if (!state.gameClient?.enabled) {
+    state.gameStatus = "Firebase 설정 전: 이 브라우저에서 봇과 연습하는 데모 모드";
+  }
+}
+
+function renderGamePage() {
+  if (!state.data) return;
+  if (!state.gameSelectedKey) initGamePicker();
+  if (!state.gameFood.length) initGameFood();
+  if (!state.gameBots.length) initGameBots();
+
+  const member = getSelectedGameMember();
+  refs.title.textContent = "메키 젤리난투";
+  refs.subtitle.textContent = "길드 캐릭터로 먹이 먹고, 작은 상대 흡수하고, 팀으로 살아남기";
+
+  renderGameStatus();
+  renderGameSelected(member);
+  renderGameArena();
+  renderGameScoreboard();
+  renderGameEventLog();
+
+  const playerCount = getGamePlayersForRender().filter((item) => !item.isBot).length;
+  refs.footerText.textContent = state.gameClient?.enabled
+    ? `실시간 젤리난투 연결 · 현재 ${playerCount}명 참여 중 · 같은 팀은 흡수 불가`
+    : "데모 모드 · Firebase 규칙을 배포하면 길드원끼리 실시간 난투가 가능합니다.";
+}
+
+function renderGameStatus() {
+  if (!refs.gameStatus) return;
+  const mode = state.gameClient?.enabled ? "online" : "local";
+  refs.gameStatus.className = `game-status ${mode}`;
+  refs.gameStatus.textContent = state.gameStatus || (mode === "online" ? "실시간 게임 서버 연결됨" : "데모 모드");
+}
+
+function renderGameSelected(member) {
+  if (member && refs.gameSelectedName) refs.gameSelectedName.textContent = `${member.nickname || "-"} · ${member.job || "-"}`;
+  if (refs.gameMass) refs.gameMass.textContent = `${Math.round(state.gameMass)}점`;
+  if (refs.gameScore) refs.gameScore.textContent = numberFormat(Math.round(state.gameScore));
+  if (refs.gameStart) refs.gameStart.textContent = state.gameJoined ? "캐릭터/팀 적용" : "게임 시작";
+  if (refs.gameLeave) refs.gameLeave.disabled = !state.gameJoined;
+  if (refs.gameReset) refs.gameReset.disabled = !state.gameJoined;
+}
+
+function renderGameArena() {
+  if (!refs.gameFoodLayer || !refs.gamePlayerLayer) return;
+
+  refs.gameFoodLayer.innerHTML = state.gameFood.map((food) => `
+    <span class="game-food food-${escapeAttr(food.type)}" style="--x:${food.x}%; --y:${food.y}%; --s:${food.size}px"></span>
+  `).join("");
+
+  const players = getGamePlayersForRender();
+  const activeCount = players.filter((item) => !item.isBot).length;
+  if (refs.gameAliveCount) refs.gameAliveCount.textContent = `${activeCount}명`;
+  if (refs.gameHint) refs.gameHint.textContent = state.gameJoined
+    ? "게임장을 누르면 그 위치로 이동합니다. 방향키/버튼도 가능해요. 큰 상대에게 가까이 가면 위험합니다."
+    : "게임 시작 후 먹이를 먹어 질량을 키우고, 작은 상대를 흡수하세요.";
+
+  refs.gamePlayerLayer.innerHTML = players.map((player) => renderJellyPlayer(player)).join("");
+  renderGameTarget();
+}
+
+function renderGameTarget() {
+  if (!refs.gameTarget) return;
+  if (!state.gameJoined || !state.gameTarget) {
+    refs.gameTarget.classList.remove("active");
+    return;
+  }
+  refs.gameTarget.classList.add("active");
+  refs.gameTarget.style.left = `${clamp(state.gameTarget.x, 0, 100)}%`;
+  refs.gameTarget.style.top = `${clamp(state.gameTarget.y, 0, 100)}%`;
+}
+
+function renderJellyPlayer(player) {
+  const member = player.member || findMemberByName(player.guild, player.nickname) || {};
+  const isMe = player.userId === state.gameUserId;
+  const relation = getJellyRelationClass(player);
+  const x = clamp(Number(player.x ?? 50), 3, 97);
+  const y = clamp(Number(player.y ?? 52), 5, 95);
+  const mass = Math.max(12, Number(player.mass || 18));
+  const size = massToBlobSize(mass);
+  const imageUrl = getCharacterImageUrl(member.nickname || player.nickname);
+  const teamName = getGameTeamLabel(player.team);
+  const shield = isMe && Date.now() < state.gameSafeUntil ? `<span class="jelly-shield">보호</span>` : "";
+
+  return `
+    <article class="jelly-player ${isMe ? "is-me" : ""} ${player.isBot ? "is-bot" : ""} ${relation} team-${escapeAttr(player.team || "solo")}" style="--x:${x}%; --y:${y}%; --size:${size}px; --z:${Math.round(size)}" title="${escapeAttr(player.nickname || "캐릭터")}">
+      ${shield}
+      <div class="jelly-blob">
+        <img src="${escapeAttr(imageUrl)}" alt="${escapeAttr(player.nickname || "캐릭터")}" loading="lazy" decoding="async" onerror="this.closest('.jelly-player').classList.add('is-missing'); this.remove();" />
+        <span class="jelly-fallback">${escapeHtml((player.nickname || "?").slice(0, 1))}</span>
+      </div>
+      <strong>${escapeHtml(player.nickname || "-")}</strong>
+      <small>${escapeHtml(teamName)} · ${Math.round(mass)}</small>
+    </article>
+  `;
+}
+
+function renderGameScoreboard() {
+  if (!refs.gameScoreboard) return;
+  const players = getGamePlayersForRender()
+    .filter((player) => isRecentGamePlayer(player))
+    .sort((a, b) => Number(b.score || 0) - Number(a.score || 0) || Number(b.mass || 0) - Number(a.mass || 0))
+    .slice(0, 10);
+
+  if (!players.length) {
+    refs.gameScoreboard.innerHTML = `<div class="virtual-empty">아직 참여자가 없습니다.</div>`;
+    return;
+  }
+
+  refs.gameScoreboard.innerHTML = players.map((player, index) => `
+    <article class="score-row ${player.userId === state.gameUserId ? "is-me" : ""}">
+      <span class="badge">${index + 1}</span>
+      <div>
+        <strong>${escapeHtml(player.nickname || "-")}</strong>
+        <small>${escapeHtml(getGameTeamLabel(player.team))}${player.isBot ? " · 봇" : ""}</small>
+      </div>
+      <b>${numberFormat(Math.round(player.score || 0))}</b>
+    </article>
+  `).join("");
+}
+
+function renderGameEventLog() {
+  if (!refs.gameEventLog) return;
+  const events = [...(state.gameEvents || [])].slice(-18).reverse();
+
+  if (!events.length) {
+    refs.gameEventLog.innerHTML = `<div class="virtual-empty">아직 난투 기록이 없습니다.</div>`;
+    return;
+  }
+
+  refs.gameEventLog.innerHTML = events.map((event) => `
+    <article class="game-event ${event.type === "eat" ? "is-eat" : ""}">
+      <span>${formatChatTime(event.createdAt)}</span>
+      <p>${escapeHtml(event.text || "")}</p>
+    </article>
+  `).join("");
+}
+
+async function startJellyGame(keepPosition = false) {
+  const member = getSelectedGameMember();
+  if (!member) return;
+
+  if (!keepPosition) {
+    state.gamePosition = randomGamePosition();
+    state.gameTarget = null;
+    state.gameMass = 22;
+    state.gameScore = 0;
+    state.gameSafeUntil = Date.now() + 2500;
+  }
+
+  state.gameJoined = true;
+  startGameLoop();
+  await syncGamePlayer(true);
+  void addGameEvent(`${member.nickname || "익명"} 입장! 먹이부터 챙기는 중`, "join");
+  renderGamePage();
+}
+
+async function leaveJellyGame() {
+  state.gameJoined = false;
+  state.gameTarget = null;
+  stopGameLoop();
+  if (state.gameClient?.enabled) {
+    await state.gameClient.leave(state.gameUserId);
+  } else {
+    state.gamePlayers = state.gamePlayers.filter((item) => item.userId !== state.gameUserId);
+  }
+  renderGamePage();
+}
+
+async function resetJellySelf() {
+  if (!state.gameJoined) {
+    await startJellyGame(false);
+    return;
+  }
+  state.gamePosition = randomGamePosition();
+  state.gameTarget = null;
+  state.gameMass = 22;
+  state.gameScore = Math.max(0, Math.floor(Number(state.gameScore || 0) * 0.35));
+  state.gameSafeUntil = Date.now() + 2500;
+  await syncGamePlayer(true);
+  void addGameEvent(`${getSelectedGameMember()?.nickname || "익명"} 작게 리스폰`, "respawn");
+  renderGamePage();
+}
+
+function handleGameArenaPointer(event) {
+  if (!state.gameJoined || !refs.gameArena) return;
+  refs.gameArena.focus({ preventScroll: true });
+  const rect = refs.gameArena.getBoundingClientRect();
+  state.gameTarget = {
+    x: clamp(((event.clientX - rect.left) / rect.width) * 100, 2, 98),
+    y: clamp(((event.clientY - rect.top) / rect.height) * 100, 4, 96)
+  };
+  renderGameTarget();
+}
+
+function handleGameKeydown(event) {
+  if (state.page !== "game" || !state.gameJoined) return;
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
+  const map = {
+    ArrowUp: "up",
+    ArrowDown: "down",
+    ArrowLeft: "left",
+    ArrowRight: "right",
+    w: "up",
+    s: "down",
+    a: "left",
+    d: "right"
+  };
+  const direction = map[event.key];
+  if (!direction) return;
+  event.preventDefault();
+  nudgeJellyPlayer(direction);
+}
+
+function nudgeJellyPlayer(direction) {
+  if (!state.gameJoined) return;
+  const step = getJellyMoveStep();
+  const next = { ...state.gamePosition };
+  if (direction === "up") next.y -= step;
+  if (direction === "down") next.y += step;
+  if (direction === "left") next.x -= step;
+  if (direction === "right") next.x += step;
+  state.gameTarget = null;
+  updateJellyPosition(next, true);
+}
+
+function startGameLoop() {
+  if (state.gameLoopTimer) return;
+  state.gameLoopTimer = window.setInterval(tickJellyGame, 90);
+}
+
+function stopGameLoop() {
+  if (!state.gameLoopTimer) return;
+  window.clearInterval(state.gameLoopTimer);
+  state.gameLoopTimer = null;
+}
+
+function tickJellyGame() {
+  if (!state.gameJoined) return;
+  moveGameBots();
+  moveJellyTowardTarget();
+  eatNearbyFood();
+  checkJellyCollisions();
+  void syncGamePlayer(false);
+  if (state.page === "game") {
+    renderGameArena();
+    renderGameScoreboard();
+    renderGameSelected(getSelectedGameMember());
+  }
+}
+
+function moveJellyTowardTarget() {
+  if (!state.gameTarget) return;
+  const dx = state.gameTarget.x - state.gamePosition.x;
+  const dy = state.gameTarget.y - state.gamePosition.y;
+  const distance = Math.hypot(dx, dy);
+  const step = getJellyMoveStep();
+  if (distance <= step) {
+    state.gamePosition = { ...state.gameTarget };
+    state.gameTarget = null;
+    return;
+  }
+  updateJellyPosition({
+    x: state.gamePosition.x + (dx / distance) * step,
+    y: state.gamePosition.y + (dy / distance) * step
+  }, false);
+}
+
+function updateJellyPosition(position, renderNow) {
+  state.gamePosition = {
+    x: clamp(Number(position.x), 2, 98),
+    y: clamp(Number(position.y), 4, 96)
+  };
+  if (renderNow && state.page === "game") renderGameArena();
+}
+
+function eatNearbyFood() {
+  let ate = 0;
+  const radius = massToArenaRadius(state.gameMass);
+  state.gameFood = state.gameFood.map((food) => {
+    const distance = Math.hypot(food.x - state.gamePosition.x, food.y - state.gamePosition.y);
+    if (distance > radius * 0.82 + 1.2) return food;
+    ate += Number(food.value || 1);
+    return makeGameFood(food.id);
+  });
+
+  if (!ate) return;
+  state.gameMass = clamp(state.gameMass + ate * 0.9, 14, 260);
+  state.gameScore += ate * 12;
+}
+
+function checkJellyCollisions() {
+  if (Date.now() < state.gameSafeUntil) return;
+  const me = makeGamePlayer(getSelectedGameMember());
+  const players = getGamePlayersForRender();
+  for (const other of players) {
+    if (!other || other.userId === state.gameUserId) continue;
+    if (!canJellyPlayersFight(me, other)) continue;
+    const distance = Math.hypot(Number(other.x || 50) - state.gamePosition.x, Number(other.y || 50) - state.gamePosition.y);
+    const myRadius = massToArenaRadius(state.gameMass);
+    const otherRadius = massToArenaRadius(other.mass || 18);
+
+    if (state.gameMass > Number(other.mass || 18) * 1.15 && distance < myRadius * 0.9) {
+      eatJellyPlayer(other);
+      return;
+    }
+
+    if (Number(other.mass || 18) > state.gameMass * 1.15 && distance < otherRadius * 0.86) {
+      getEatenByJelly(other);
+      return;
+    }
+  }
+}
+
+function eatJellyPlayer(other) {
+  const member = getSelectedGameMember();
+  const gain = Math.max(4, Math.round(Number(other.mass || 18) * 0.42));
+  state.gameMass = clamp(state.gameMass + gain, 18, 280);
+  state.gameScore += Math.max(60, Math.round(Number(other.mass || 18) * 18));
+  const text = `${member?.nickname || "익명"} → ${other.nickname || "상대"} 흡수! +${gain} 질량`;
+  void addGameEvent(text, "eat");
+
+  if (other.isBot) {
+    respawnGameBot(other.userId);
+  } else if (state.gameClient?.enabled) {
+    const respawn = randomGamePosition();
+    void state.gameClient.markPlayerEaten(other.userId, {
+      x: respawn.x,
+      y: respawn.y,
+      mass: 18,
+      score: Math.max(0, Math.floor(Number(other.score || 0) * 0.45)),
+      eatenAt: new Date().toISOString(),
+      lastEvent: `${member?.nickname || "누군가"}에게 흡수됨`
+    });
+  }
+
+  void syncGamePlayer(true);
+}
+
+function getEatenByJelly(other) {
+  const member = getSelectedGameMember();
+  const text = `${other.nickname || "상대"} → ${member?.nickname || "익명"} 흡수! 도망 실패`;
+  void addGameEvent(text, "eat");
+  state.gamePosition = randomGamePosition();
+  state.gameTarget = null;
+  state.gameMass = 18;
+  state.gameScore = Math.max(0, Math.floor(Number(state.gameScore || 0) * 0.45));
+  state.gameSafeUntil = Date.now() + 2800;
+  void syncGamePlayer(true);
+}
+
+function moveGameBots() {
+  if (!state.gameBots.length) return;
+  state.gameBots = state.gameBots.map((bot) => {
+    let vx = Number(bot.vx || 0);
+    let vy = Number(bot.vy || 0);
+    if (Math.random() < 0.055) {
+      vx = (Math.random() - 0.5) * 1.8;
+      vy = (Math.random() - 0.5) * 1.8;
+    }
+    let x = Number(bot.x || 50) + vx;
+    let y = Number(bot.y || 50) + vy;
+    if (x < 5 || x > 95) vx *= -1;
+    if (y < 8 || y > 92) vy *= -1;
+    x = clamp(x, 5, 95);
+    y = clamp(y, 8, 92);
+    return { ...bot, x, y, vx, vy };
+  });
+}
+
+function respawnGameBot(userId) {
+  state.gameBots = state.gameBots.map((bot) => {
+    if (bot.userId !== userId) return bot;
+    const next = randomGamePosition();
+    return {
+      ...bot,
+      x: next.x,
+      y: next.y,
+      mass: 16 + Math.random() * 20,
+      score: Math.max(0, Math.floor(Number(bot.score || 0) * 0.35)),
+      vx: (Math.random() - 0.5) * 1.5,
+      vy: (Math.random() - 0.5) * 1.5
+    };
+  });
+}
+
+async function syncGamePlayer(force = false) {
+  if (!state.gameJoined) return;
+  const now = Date.now();
+  if (!force && now - state.gameLastSyncAt < 240) return;
+  state.gameLastSyncAt = now;
+
+  const player = makeGamePlayer(getSelectedGameMember());
+  if (state.gameClient?.enabled) {
+    await state.gameClient.upsertPlayer(player);
+  } else {
+    upsertLocalGamePlayer(player);
+  }
+}
+
+function syncLocalJellyFromServer(players) {
+  if (!state.gameJoined) return;
+  const me = players.find((player) => player.userId === state.gameUserId);
+  if (!me) return;
+  if (me.eatenAt && me.eatenAt !== state.gameLastEatenAt) {
+    state.gameLastEatenAt = me.eatenAt;
+    state.gamePosition = { x: clamp(me.x, 2, 98), y: clamp(me.y, 4, 96) };
+    state.gameTarget = null;
+    state.gameMass = Math.max(18, Number(me.mass || 18));
+    state.gameScore = Math.max(0, Number(me.score || 0));
+    state.gameSafeUntil = Date.now() + 2800;
+    return;
+  }
+
+  if (Number(me.mass || 0) > state.gameMass + 2) state.gameMass = Number(me.mass);
+  if (Number(me.score || 0) > state.gameScore) state.gameScore = Number(me.score);
+}
+
+function makeGamePlayer(member) {
+  return {
+    userId: state.gameUserId,
+    memberKey: virtualMemberKey(member),
+    nickname: member?.nickname || "익명",
+    guild: member?.guild || "-",
+    job: member?.job || "-",
+    team: state.gameTeam || "solo",
+    x: clamp(Number(state.gamePosition.x), 2, 98),
+    y: clamp(Number(state.gamePosition.y), 4, 96),
+    mass: Math.round(Number(state.gameMass || 18)),
+    score: Math.round(Number(state.gameScore || 0)),
+    safeUntil: state.gameSafeUntil ? new Date(state.gameSafeUntil).toISOString() : "",
+    lastSeen: new Date().toISOString()
+  };
+}
+
+function upsertLocalGamePlayer(player) {
+  const byId = new Map((state.gamePlayers || []).map((item) => [item.userId, item]));
+  byId.set(player.userId, player);
+  state.gamePlayers = [...byId.values()];
+}
+
+function getGamePlayersForRender() {
+  const map = new Map();
+  const membersByKey = new Map((state.data?.members || []).map((member) => [virtualMemberKey(member), member]));
+
+  for (const player of state.gamePlayers || []) {
+    if (!isRecentGamePlayer(player)) continue;
+    const member = membersByKey.get(player.memberKey) || findMemberByName(player.guild, player.nickname);
+    map.set(player.userId, { ...player, member });
+  }
+
+  if (state.gameJoined) {
+    map.set(state.gameUserId, makeGamePlayer(getSelectedGameMember()));
+  }
+
+  const realCount = [...map.values()].filter((item) => !item.isBot).length;
+  if (!state.gameClient?.enabled || realCount < 4) {
+    for (const bot of state.gameBots) {
+      if (!map.has(bot.userId)) map.set(bot.userId, bot);
+    }
+  }
+
+  return [...map.values()].sort((a, b) => Number(a.mass || 0) - Number(b.mass || 0));
+}
+
+function getJellyRelationClass(player) {
+  if (!state.gameJoined || player.userId === state.gameUserId) return "";
+  const me = makeGamePlayer(getSelectedGameMember());
+  if (!canJellyPlayersFight(me, player)) return "is-team";
+  if (state.gameMass > Number(player.mass || 18) * 1.15) return "can-eat";
+  if (Number(player.mass || 18) > state.gameMass * 1.15) return "is-danger";
+  return "is-even";
+}
+
+function canJellyPlayersFight(a, b) {
+  const teamA = a?.team || "solo";
+  const teamB = b?.team || "solo";
+  if (teamA === "solo" || teamB === "solo") return true;
+  return teamA !== teamB;
+}
+
+function getSelectedGameMember() {
+  const members = state.data?.members || [];
+  return members.find((member) => virtualMemberKey(member) === state.gameSelectedKey) || members[0] || null;
+}
+
+function createGameFood(count) {
+  return Array.from({ length: count }, (_, index) => makeGameFood(`food-${index}`));
+}
+
+function makeGameFood(id) {
+  const roll = Math.random();
+  const type = roll > 0.9 ? "gold" : roll > 0.68 ? "mint" : roll > 0.42 ? "blue" : "pink";
+  const value = type === "gold" ? 4 : type === "mint" ? 2 : 1;
+  return {
+    id,
+    type,
+    value,
+    size: type === "gold" ? 14 : type === "mint" ? 11 : 8,
+    x: Math.round((4 + Math.random() * 92) * 10) / 10,
+    y: Math.round((6 + Math.random() * 88) * 10) / 10
+  };
+}
+
+function randomGamePosition() {
+  return {
+    x: 8 + Math.random() * 84,
+    y: 10 + Math.random() * 80
+  };
+}
+
+function getJellyMoveStep() {
+  return clamp(3.35 - Math.sqrt(Number(state.gameMass || 18)) / 12, 0.85, 2.65);
+}
+
+function massToBlobSize(mass) {
+  return clamp(30 + Math.sqrt(Number(mass || 18)) * 10.8, 48, 152);
+}
+
+function massToArenaRadius(mass) {
+  return clamp(2.2 + Math.sqrt(Number(mass || 18)) * 0.32, 3.1, 11.8);
+}
+
+function isRecentGamePlayer(player) {
+  if (player.isBot) return true;
+  const lastSeen = new Date(player.lastSeen || player.updatedAt || Date.now()).getTime();
+  if (!Number.isFinite(lastSeen)) return true;
+  return Date.now() - lastSeen < 1000 * 60 * 20;
+}
+
+async function addGameEvent(text, type = "info") {
+  const member = getSelectedGameMember();
+  const event = {
+    id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    userId: state.gameUserId,
+    nickname: member?.nickname || "익명",
+    guild: member?.guild || "-",
+    type,
+    text: String(text || "").slice(0, 160),
+    createdAt: new Date().toISOString()
+  };
+
+  if (state.gameClient?.enabled) {
+    await state.gameClient.addEvent(event);
+    return;
+  }
+
+  state.gameEvents = [...state.gameEvents, event].slice(-80);
+  try {
+    localStorage.setItem(LOCAL_GAME_EVENTS_KEY, JSON.stringify({ events: state.gameEvents }));
+  } catch {}
+  if (state.page === "game") renderGameEventLog();
+}
+
+function readLocalGameEvents() {
+  try {
+    const raw = localStorage.getItem(LOCAL_GAME_EVENTS_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed?.events) ? parsed.events : [];
+  } catch {
+    return [];
+  }
+}
+
+function getOrCreateGameUserId() {
+  try {
+    const existing = localStorage.getItem(LOCAL_GAME_KEY);
+    if (existing) return existing;
+    const id = `g-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    localStorage.setItem(LOCAL_GAME_KEY, id);
+    return id;
+  } catch {
+    return `g-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+}
+
+function getGameTeamLabel(team) {
+  switch (team) {
+    case "blue": return "파랑팀";
+    case "violet": return "보라팀";
+    case "green": return "초록팀";
+    case "orange": return "주황팀";
+    default: return "개인전";
+  }
+}
+
 function getGuildFilteredMembers() {
   return [...(state.data?.members || [])]
     .filter((member) => state.guildFilter === "all" || member.guild === state.guildFilter);
@@ -1243,9 +1971,11 @@ async function applyManualFromEditor() {
     initGuildFilter();
     initVisualFilters();
     initVirtualPicker();
+    initGamePicker();
     render();
     if (state.page === "characters") renderCharactersPage();
     if (state.page === "virtual") renderVirtualPage();
+    if (state.page === "game") renderGamePage();
   } catch (error) {
     refs.editorMessage.textContent = `저장 실패: ${error.message}`;
   } finally {
@@ -1278,6 +2008,7 @@ async function clearLocalManual() {
     render();
     if (state.page === "characters") renderCharactersPage();
     if (state.page === "virtual") renderVirtualPage();
+    if (state.page === "game") renderGamePage();
     renderEditorRows();
   } catch (error) {
     refs.editorMessage.textContent = `초기화 실패: ${error.message}`;

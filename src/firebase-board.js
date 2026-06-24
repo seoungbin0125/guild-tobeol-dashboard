@@ -258,6 +258,155 @@ function normalizeVirtualMessage(id, data) {
   };
 }
 
+
+export function createJellyGameClient({
+  config,
+  collectionName = "jellyGame",
+  onPlayers,
+  onEvents,
+  onError,
+  onStatus
+}) {
+  if (!isFirebaseConfigured(config)) {
+    onStatus?.("local", "Firebase 설정 전: 이 브라우저에서 봇과 연습하는 데모 모드");
+    return {
+      enabled: false,
+      async upsertPlayer() {
+        throw new Error("Firebase 설정이 없습니다.");
+      },
+      async markPlayerEaten() {
+        throw new Error("Firebase 설정이 없습니다.");
+      },
+      async leave() {
+        throw new Error("Firebase 설정이 없습니다.");
+      },
+      async addEvent() {
+        throw new Error("Firebase 설정이 없습니다.");
+      },
+      unsubscribe() {}
+    };
+  }
+
+  const app = getFirebaseApp(config);
+  const db = getFirestore(app);
+  const playersRef = collection(db, collectionName, "arena", "players");
+  const eventsRef = collection(db, collectionName, "arena", "events");
+  const eventsQuery = query(eventsRef, orderBy("createdAt", "asc"));
+
+  onStatus?.("connecting", "젤리난투 서버 연결 중...");
+
+  const unsubscribePlayers = onSnapshot(
+    playersRef,
+    (snapshot) => {
+      const players = snapshot.docs.map((item) => normalizeJellyPlayer(item.id, item.data()));
+      onPlayers?.(players);
+      onStatus?.("online", `실시간 젤리난투 연결됨 · ${players.length}명 참여`);
+    },
+    (error) => {
+      onError?.(error);
+      onStatus?.("error", `게임 연결 실패: ${error.message}`);
+    }
+  );
+
+  const unsubscribeEvents = onSnapshot(
+    eventsQuery,
+    (snapshot) => {
+      const events = snapshot.docs.map((item) => normalizeJellyEvent(item.id, item.data())).slice(-80);
+      onEvents?.(events);
+    },
+    (error) => {
+      onError?.(error);
+    }
+  );
+
+  return {
+    enabled: true,
+    async upsertPlayer(player) {
+      const id = safeDocId(player.userId);
+      await setDoc(doc(playersRef, id), {
+        userId: String(player.userId || id),
+        memberKey: String(player.memberKey || ""),
+        nickname: String(player.nickname || "익명").slice(0, 30),
+        guild: String(player.guild || "-").slice(0, 30),
+        job: String(player.job || "-").slice(0, 40),
+        team: String(player.team || "solo").slice(0, 16),
+        x: Number(player.x || 50),
+        y: Number(player.y || 52),
+        mass: Number(player.mass || 18),
+        score: Number(player.score || 0),
+        safeUntil: String(player.safeUntil || "").slice(0, 40),
+        eatenAt: String(player.eatenAt || "").slice(0, 40),
+        lastEvent: String(player.lastEvent || "").slice(0, 160),
+        lastSeen: new Date().toISOString(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    },
+    async markPlayerEaten(userId, patch) {
+      await setDoc(doc(playersRef, safeDocId(userId)), {
+        x: Number(patch.x || 50),
+        y: Number(patch.y || 52),
+        mass: Number(patch.mass || 18),
+        score: Number(patch.score || 0),
+        safeUntil: new Date(Date.now() + 2800).toISOString(),
+        eatenAt: String(patch.eatenAt || new Date().toISOString()).slice(0, 40),
+        lastEvent: String(patch.lastEvent || "흡수됨").slice(0, 160),
+        lastSeen: new Date().toISOString(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    },
+    async leave(userId) {
+      await deleteDoc(doc(playersRef, safeDocId(userId)));
+    },
+    async addEvent(event) {
+      await addDoc(eventsRef, {
+        userId: String(event.userId || "").slice(0, 80),
+        nickname: String(event.nickname || "익명").slice(0, 30),
+        guild: String(event.guild || "-").slice(0, 30),
+        type: String(event.type || "info").slice(0, 20),
+        text: String(event.text || "").slice(0, 160),
+        createdAt: serverTimestamp()
+      });
+    },
+    unsubscribe() {
+      unsubscribePlayers();
+      unsubscribeEvents();
+    }
+  };
+}
+
+function normalizeJellyPlayer(id, data) {
+  return {
+    id,
+    userId: String(data.userId || id),
+    memberKey: String(data.memberKey || ""),
+    nickname: String(data.nickname || "익명"),
+    guild: String(data.guild || "-"),
+    job: String(data.job || "-"),
+    team: String(data.team || "solo"),
+    x: Number(data.x || 50),
+    y: Number(data.y || 52),
+    mass: Number(data.mass || 18),
+    score: Number(data.score || 0),
+    safeUntil: String(data.safeUntil || ""),
+    eatenAt: String(data.eatenAt || ""),
+    lastEvent: String(data.lastEvent || ""),
+    lastSeen: String(data.lastSeen || ""),
+    updatedAt: toIsoString(data.updatedAt) || data.updatedAt || ""
+  };
+}
+
+function normalizeJellyEvent(id, data) {
+  return {
+    id,
+    userId: String(data.userId || ""),
+    nickname: String(data.nickname || "익명"),
+    guild: String(data.guild || "-"),
+    type: String(data.type || "info"),
+    text: String(data.text || ""),
+    createdAt: toIsoString(data.createdAt) || data.createdAt || new Date().toISOString()
+  };
+}
+
 function safeDocId(value) {
   return String(value || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80) || "unknown";
 }

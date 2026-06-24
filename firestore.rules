@@ -93,5 +93,77 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if true;
     }
+
+    match /jellyGame/arena/players/{playerId} {
+      allow read: if true;
+
+      // 메키 젤리난투 실시간 위치/질량/점수 동기화용입니다.
+      // 공개 정적 사이트에서 바로 플레이하기 위한 간단 규칙입니다.
+      allow create, update: if request.resource.data.keys().hasOnly([
+          'userId', 'memberKey', 'nickname', 'guild', 'job', 'team', 'x', 'y',
+          'mass', 'score', 'safeUntil', 'eatenAt', 'lastEvent', 'lastSeen', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'userId', 'memberKey', 'nickname', 'guild', 'job', 'team', 'x', 'y',
+          'mass', 'score', 'safeUntil', 'eatenAt', 'lastEvent', 'lastSeen'
+        ])
+        && request.resource.data.userId is string
+        && request.resource.data.userId.size() <= 80
+        && request.resource.data.memberKey is string
+        && request.resource.data.memberKey.size() <= 80
+        && request.resource.data.nickname is string
+        && request.resource.data.nickname.size() <= 30
+        && request.resource.data.guild is string
+        && request.resource.data.guild.size() <= 30
+        && request.resource.data.job is string
+        && request.resource.data.job.size() <= 40
+        && request.resource.data.team is string
+        && request.resource.data.team.size() <= 16
+        && request.resource.data.x is number
+        && request.resource.data.x >= 0
+        && request.resource.data.x <= 100
+        && request.resource.data.y is number
+        && request.resource.data.y >= 0
+        && request.resource.data.y <= 100
+        && request.resource.data.mass is number
+        && request.resource.data.mass >= 1
+        && request.resource.data.mass <= 400
+        && request.resource.data.score is number
+        && request.resource.data.score >= 0
+        && request.resource.data.score <= 10000000
+        && request.resource.data.safeUntil is string
+        && request.resource.data.safeUntil.size() <= 40
+        && request.resource.data.eatenAt is string
+        && request.resource.data.eatenAt.size() <= 40
+        && request.resource.data.lastEvent is string
+        && request.resource.data.lastEvent.size() <= 160
+        && request.resource.data.lastSeen is string
+        && request.resource.data.lastSeen.size() <= 40;
+
+      allow delete: if true;
+    }
+
+    match /jellyGame/arena/events/{eventId} {
+      allow read: if true;
+
+      allow create: if request.resource.data.keys().hasOnly([
+          'userId', 'nickname', 'guild', 'type', 'text', 'createdAt'
+        ])
+        && request.resource.data.userId is string
+        && request.resource.data.userId.size() <= 80
+        && request.resource.data.nickname is string
+        && request.resource.data.nickname.size() <= 30
+        && request.resource.data.guild is string
+        && request.resource.data.guild.size() <= 30
+        && request.resource.data.type is string
+        && request.resource.data.type.size() <= 20
+        && request.resource.data.text is string
+        && request.resource.data.text.size() >= 1
+        && request.resource.data.text.size() <= 160;
+
+      allow update: if false;
+      allow delete: if true;
+    }
+
   }
 }

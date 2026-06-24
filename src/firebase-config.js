@@ -15,3 +15,4 @@ export const FIREBASE_CONFIG = {
 export const FIREBASE_COLLECTION = "guidePosts";
 export const FIREBASE_MANUAL_COLLECTION = "weeklyOverrides";
 export const FIREBASE_LOBBY_COLLECTION = "virtualLobby";
+export const FIREBASE_GAME_COLLECTION = "jellyGame";
