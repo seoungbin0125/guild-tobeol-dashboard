@@ -1040,3 +1040,36 @@ footer {
   border: 1px dashed rgba(255, 138, 61, 0.32);
   font-weight: 1000;
 }
+
+/* src/style.css 하단에 추가 */
+
+@media (max-width: 760px) {
+  /* 테이블을 숨깁니다 */
+  .table-wrap { display: none; }
+  
+  /* 카드 리스트를 보이게 합니다 */
+  .mobile-card-list { display: block; }
+
+  .mobile-card-item {
+    background: #ffffff;
+    padding: 16px;
+    border-radius: 16px;
+    margin-bottom: 12px;
+    border: 1px solid rgba(0,0,0,0.05);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  }
+  
+  .mobile-card-item div {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    border-bottom: 1px solid #f9f9f9;
+  }
+  
+  .mobile-card-item strong { color: var(--text); }
+}
+
+/* 데스크탑에서는 카드 리스트를 숨깁니다 */
+@media (min-width: 761px) {
+  .mobile-card-list { display: none; }
+}

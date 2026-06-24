@@ -318,26 +318,6 @@ function renderSummary() {
   `).join("");
 }
 
-function renderTable() {
-  const members = getFilteredMembers();
-  const table = getTableSpec(state.tab);
-
-  refs.panelTitle.textContent = table.title;
-  refs.panelDesc.textContent = table.desc;
-  refs.tableHead.innerHTML = `<tr>${table.columns.map((column) => `<th>${column.label}</th>`).join("")}</tr>`;
-
-  if (members.length === 0) {
-    refs.tableBody.innerHTML = `<tr><td colspan="${table.columns.length}" class="empty">표시할 데이터가 없습니다.</td></tr>`;
-    return;
-  }
-
-  refs.tableBody.innerHTML = members.map((member, index) => `
-    <tr class="${member.isManual ? "manual-row" : ""}">
-      ${table.columns.map((column) => `<td>${column.render(member, index)}</td>`).join("")}
-    </tr>
-  `).join("");
-}
-
 function getGuildFilteredMembers() {
   return [...(state.data?.members || [])]
     .filter((member) => state.guildFilter === "all" || member.guild === state.guildFilter);
@@ -1118,4 +1098,45 @@ function escapeHtml(value) {
 
 function escapeAttr(value) {
   return escapeHtml(value);
+}
+
+
+// src/main.js 의 renderTable 함수를 이렇게 수정해보세요
+function renderTable() {
+  const members = getFilteredMembers();
+  const table = getTableSpec(state.tab);
+
+  refs.panelTitle.textContent = table.title;
+  refs.panelDesc.textContent = table.desc;
+  
+  // 1. 데스크탑용 테이블 렌더링
+  refs.tableHead.innerHTML = `<tr>${table.columns.map((column) => `<th>${column.label}</th>`).join("")}</tr>`;
+  
+  // 2. 모바일용 카드 리스트 렌더링 (테이블과 별도로 컨테이너 필요)
+  // 만약 html에 .mobile-card-list div가 없다면 panel 안에 하나 추가해주세요.
+  let cardHtml = '';
+  
+  if (members.length === 0) {
+    refs.tableBody.innerHTML = `<tr><td colspan="${table.columns.length}" class="empty">표시할 데이터가 없습니다.</td></tr>`;
+    cardHtml = '<div class="empty">표시할 데이터가 없습니다.</div>';
+  } else {
+    refs.tableBody.innerHTML = members.map((member, index) => `
+      <tr class="${member.isManual ? "manual-row" : ""}">
+        ${table.columns.map((column) => `<td>${column.render(member, index)}</td>`).join("")}
+      </tr>
+    `).join("");
+
+    // 카드 형태의 모바일 데이터 생성 (간단히 닉네임 + 핵심지표 2개만 보여줌)
+    cardHtml = members.map(m => `
+      <div class="mobile-card-item">
+        <div><strong>${m.nickname}</strong><span>Lv.${m.level}</span></div>
+        <div><span>전투력</span><span>${formatKoreanPower(m.powerValue)}</span></div>
+        <div><span>성장률</span><span>${renderRate(m.powerGrowthRate)}</span></div>
+      </div>
+    `).join("");
+  }
+
+  // 모바일 카드 리스트를 넣을 공간(ID가 mobile-card-list인 div 등)을 panel 안에 추가하고 아래 코드 실행
+  const cardList = document.getElementById('mobile-card-list');
+  if (cardList) cardList.innerHTML = cardHtml;
 }
