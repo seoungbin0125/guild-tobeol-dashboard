@@ -25,7 +25,10 @@ const state = {
   guildFilter: "all",
   keyword: "",
   sort: "powerGrowth",
-  editorUnlocked: false
+  visualGuildFilter: "all",
+  visualKeyword: "",
+  visualSort: "powerGrowth",
+  editorUnlocked: true
 };
 
 const refs = {
@@ -42,6 +45,13 @@ const refs = {
   panelDesc: document.getElementById("panel-desc"),
   tableHead: document.getElementById("table-head"),
   tableBody: document.getElementById("table-body"),
+  mobileCardList: document.getElementById("mobile-card-list"),
+  visualStats: document.getElementById("visual-stats"),
+  visualGuildFilter: document.getElementById("visual-guild-filter"),
+  visualKeyword: document.getElementById("visual-keyword"),
+  visualSort: document.getElementById("visual-sort"),
+  visualOverview: document.getElementById("visual-overview"),
+  characterGrid: document.getElementById("character-grid"),
   footerText: document.getElementById("footer-text"),
   editDialog: document.getElementById("edit-dialog"),
   openEditor: document.getElementById("open-editor"),
@@ -99,6 +109,7 @@ async function init() {
     rebuildPosts();
     rebuildData();
     initGuildFilter();
+    initVisualFilters();
     renderPage();
   } catch (error) {
     refs.tableBody.innerHTML = `<tr><td colspan="99" class="empty">${escapeHtml(error.message)}</td></tr>`;
@@ -133,19 +144,34 @@ function bindEvents() {
     });
   });
 
-  refs.guildFilter.addEventListener("change", (event) => {
+  refs.guildFilter?.addEventListener("change", (event) => {
     state.guildFilter = event.target.value;
     render();
   });
 
-  refs.keyword.addEventListener("input", (event) => {
+  refs.keyword?.addEventListener("input", (event) => {
     state.keyword = event.target.value.trim();
     renderTable();
   });
 
-  refs.sort.addEventListener("change", (event) => {
+  refs.sort?.addEventListener("change", (event) => {
     state.sort = event.target.value;
     renderTable();
+  });
+
+  refs.visualGuildFilter?.addEventListener("change", (event) => {
+    state.visualGuildFilter = event.target.value;
+    renderCharactersPage();
+  });
+
+  refs.visualKeyword?.addEventListener("input", (event) => {
+    state.visualKeyword = event.target.value.trim();
+    renderCharactersPage();
+  });
+
+  refs.visualSort?.addEventListener("change", (event) => {
+    state.visualSort = event.target.value;
+    renderCharactersPage();
   });
 
   refs.openEditor?.addEventListener("click", openEditor);
@@ -160,6 +186,7 @@ function bindEvents() {
   });
   refs.applyManual?.addEventListener("click", applyManualFromEditor);
   refs.clearManual?.addEventListener("click", clearLocalManual);
+  refs.openActionsRefresh?.addEventListener("click", openActionsRefresh);
   refs.openPostEditor?.addEventListener("click", openPostEditor);
   refs.closePostEditor?.addEventListener("click", closePostEditor);
   refs.savePost?.addEventListener("click", savePostFromForm);
@@ -177,6 +204,11 @@ function renderPage() {
 
   if (state.page === "dashboard") {
     render();
+    return;
+  }
+
+  if (state.page === "characters") {
+    renderCharactersPage();
     return;
   }
 
@@ -230,6 +262,17 @@ function initGuildFilter() {
     ...guilds.map((guild) => `<option value="${escapeAttr(guild)}">${escapeHtml(guild)}</option>`)
   ].join("");
   refs.guildFilter.value = state.guildFilter;
+}
+
+function initVisualFilters() {
+  if (!refs.visualGuildFilter) return;
+  const guilds = getGuilds();
+  refs.visualGuildFilter.innerHTML = [
+    `<option value="all">전체</option>`,
+    ...guilds.map((guild) => `<option value="${escapeAttr(guild)}">${escapeHtml(guild)}</option>`)
+  ].join("");
+  refs.visualGuildFilter.value = state.visualGuildFilter;
+  if (refs.visualSort) refs.visualSort.value = state.visualSort;
 }
 
 function getGuilds() {
@@ -316,6 +359,193 @@ function renderSummary() {
       <div class="value">${escapeHtml(value)}</div>
     </article>
   `).join("");
+}
+
+function renderCharactersPage() {
+  const data = state.data;
+  if (!data) return;
+
+  const selectedGuildText = state.visualGuildFilter === "all" ? "전체 길드" : state.visualGuildFilter;
+  const members = getVisualFilteredMembers();
+
+  refs.title.textContent = `${selectedGuildText} 캐릭터 모아보기`;
+  refs.subtitle.textContent = `캐릭터 이미지 · 전투력 · 토벌전 · 변화량을 한 화면에서 확인`;
+
+  renderVisualStats(members);
+  renderVisualOverview();
+  renderCharacterGrid(members);
+
+  const manualText = data.manualAppliedCount > 0 ? ` · 수동 보정 ${data.manualAppliedCount}건 포함` : "";
+  refs.footerText.textContent = `${members.length}명 표시 중 · 현재 ${data.capturedDate || "-"} 수집 · 이미지 닉네임 매칭${manualText}`;
+}
+
+function getVisualFilteredMembers() {
+  const keyword = state.visualKeyword.toLowerCase();
+  return [...(state.data?.members || [])]
+    .filter((member) => state.visualGuildFilter === "all" || member.guild === state.visualGuildFilter)
+    .filter((member) => {
+      if (!keyword) return true;
+      return `${member.guild} ${member.nickname} ${member.job}`.toLowerCase().includes(keyword);
+    })
+    .sort((a, b) => getSortValue(b, state.visualSort) - getSortValue(a, state.visualSort));
+}
+
+function renderVisualStats(members) {
+  if (!refs.visualStats) return;
+  const topPower = getTopMember(members, "power");
+  const topTobeol = getTopMember(members, "tobeol");
+  const avgPowerGrowth = averageNumeric(members.map((member) => member.powerGrowthValue));
+  const avgTobeolGrowth = averageNumeric(members.map((member) => member.tobeolGrowthValue));
+  const cards = [
+    ["표시 인원", `${members.length}명`],
+    ["전투력 1위", topPower ? `${topPower.nickname} · ${formatKoreanPower(topPower.powerValue)}` : "-"],
+    ["평균 전투력 변화", avgPowerGrowth == null ? "비교 없음" : formatSignedKoreanPower(avgPowerGrowth)],
+    ["평균 토벌전 변화", avgTobeolGrowth == null ? "비교 없음" : formatSignedKoreanPower(avgTobeolGrowth)],
+    ["토벌전 1위", topTobeol ? `${topTobeol.nickname} · ${formatKoreanPower(topTobeol.tobeolValue)}` : "-"]
+  ];
+
+  refs.visualStats.innerHTML = cards.map(([label, value]) => `
+    <article class="visual-stat-card">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+    </article>
+  `).join("");
+}
+
+function renderVisualOverview() {
+  if (!refs.visualOverview) return;
+  const guilds = state.visualGuildFilter === "all" ? getGuilds() : [state.visualGuildFilter];
+  const allMembers = state.data?.members || [];
+  const guildSummaries = guilds
+    .map((guild) => {
+      const members = allMembers.filter((member) => member.guild === guild);
+      return { guild, members, summary: buildSummary(members) };
+    })
+    .filter((item) => item.members.length);
+
+  refs.visualOverview.innerHTML = guildSummaries.map(({ guild, members, summary }) => {
+    const topPower = getTopMember(members, "power");
+    const topTobeol = getTopMember(members, "tobeol");
+    return `
+      <article class="overview-card">
+        <div class="overview-title">
+          <span class="guild-pill">${escapeHtml(guild)}</span>
+          <strong>${summary.memberCount}명</strong>
+        </div>
+        <div class="overview-lines">
+          ${renderOverviewLine("총 전투력", formatKoreanPower(summary.totalPowerValue))}
+          ${renderOverviewLine("총 토벌전", formatKoreanPower(summary.totalTobeolValue))}
+          ${renderOverviewLine("전투력 대표", topPower ? topPower.nickname : "-")}
+          ${renderOverviewLine("토벌전 대표", topTobeol ? topTobeol.nickname : "-")}
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function renderOverviewLine(label, value) {
+  return `
+    <div>
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+    </div>
+  `;
+}
+
+function renderCharacterGrid(members) {
+  if (!refs.characterGrid) return;
+  if (!members.length) {
+    refs.characterGrid.innerHTML = `<div class="empty character-empty">표시할 캐릭터가 없습니다.</div>`;
+    return;
+  }
+
+  const max = getVisualMaxValues(members);
+  refs.characterGrid.innerHTML = members.map((member, index) => renderCharacterCard(member, index, max)).join("");
+}
+
+function renderCharacterCard(member, index, max) {
+  const imageUrl = getCharacterImageUrl(member.nickname);
+  const rank = member.rank ? `#${member.rank}` : `#${index + 1}`;
+  const manualBadge = member.isManual ? `<span class="manual-badge">수동</span>` : "";
+  const powerGrowth = member.powerGrowthValue == null ? null : Number(member.powerGrowthValue);
+  const tobeolGrowth = member.tobeolGrowthValue == null ? null : Number(member.tobeolGrowthValue);
+
+  return `
+    <article class="character-card ${member.isManual ? "manual-card" : ""}">
+      <div class="character-art">
+        <img src="${escapeAttr(imageUrl)}" alt="${escapeAttr(member.nickname || "캐릭터")} 캐릭터 이미지" loading="lazy" decoding="async" onerror="this.closest('.character-art').classList.add('is-missing'); this.remove();" />
+        <span class="image-fallback">이미지 없음</span>
+      </div>
+      <div class="character-info">
+        <div class="character-topline">
+          <span class="badge">${escapeHtml(rank)}</span>
+          ${renderGuild(member)}
+        </div>
+        <h3>${escapeHtml(member.nickname || "-")} ${manualBadge}</h3>
+        <p>${escapeHtml(member.job || "-")} · Lv.${escapeHtml(member.level || "-")}</p>
+      </div>
+      <div class="character-bars">
+        ${renderCharacterBar("전투력", formatKoreanPower(member.powerValue), percentOf(member.powerValue, max.power), "") }
+        ${renderCharacterBar("전투력 변화", powerGrowth == null ? "비교 없음" : formatSignedKoreanPower(powerGrowth), percentOf(Math.abs(powerGrowth || 0), max.powerGrowth), growthClass(powerGrowth))}
+        ${renderCharacterBar("토벌전", formatKoreanPower(member.tobeolValue), percentOf(member.tobeolValue, max.tobeol), "") }
+        ${renderCharacterBar("토벌전 변화", tobeolGrowth == null ? "비교 없음" : formatSignedKoreanPower(tobeolGrowth), percentOf(Math.abs(tobeolGrowth || 0), max.tobeolGrowth), growthClass(tobeolGrowth))}
+      </div>
+    </article>
+  `;
+}
+
+function renderCharacterBar(label, value, percent, className) {
+  const safePercent = Math.max(0, Math.min(100, Number(percent || 0)));
+  return `
+    <div class="character-bar ${escapeAttr(className || "")}" style="--bar:${safePercent}%">
+      <div class="character-bar-label">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+      </div>
+      <div class="bar-track"><span></span></div>
+    </div>
+  `;
+}
+
+function getCharacterImageUrl(nickname) {
+  return `https://mgf.gg/ranking/ranking_image.php?n=${encodeURIComponent(String(nickname || ""))}`;
+}
+
+function getVisualMaxValues(members) {
+  return {
+    power: getMaxNumber(members.map((member) => member.powerValue)),
+    powerGrowth: getMaxNumber(members.map((member) => Math.abs(Number(member.powerGrowthValue || 0)))),
+    tobeol: getMaxNumber(members.map((member) => member.tobeolValue)),
+    tobeolGrowth: getMaxNumber(members.map((member) => Math.abs(Number(member.tobeolGrowthValue || 0))))
+  };
+}
+
+function getMaxNumber(values) {
+  return Math.max(1, ...values.map((value) => Number(value || 0)));
+}
+
+function percentOf(value, max) {
+  return (Number(value || 0) / Number(max || 1)) * 100;
+}
+
+function growthClass(value) {
+  if (value == null) return "is-empty";
+  if (Number(value) > 0) return "is-up";
+  if (Number(value) < 0) return "is-down";
+  return "is-zero";
+}
+
+function getTopMember(members, type) {
+  const key = type === "tobeol" ? "tobeolValue" : "powerValue";
+  return [...members].sort((a, b) => Number(b[key] || 0) - Number(a[key] || 0))[0] || null;
+}
+
+function averageNumeric(values) {
+  const valid = values
+    .filter((value) => value != null && Number.isFinite(Number(value)))
+    .map((value) => Number(value));
+  if (!valid.length) return null;
+  return Math.round(valid.reduce((sum, value) => sum + value, 0) / valid.length);
 }
 
 function getGuildFilteredMembers() {
@@ -412,17 +642,10 @@ function renderRate(value) {
 function openEditor() {
   if (!state.rawData) return;
   refs.editDialog.showModal();
-  refs.passwordMessage.textContent = "";
+  refs.passwordMessage && (refs.passwordMessage.textContent = "");
   refs.editorMessage.textContent = "";
-
-  if (state.editorUnlocked) {
-    showEditorView();
-  } else {
-    refs.passwordView.classList.remove("hidden");
-    refs.editorView.classList.add("hidden");
-    refs.editorPassword.value = "";
-    setTimeout(() => refs.editorPassword.focus(), 0);
-  }
+  state.editorUnlocked = true;
+  showEditorView();
 }
 
 function closeEditor() {
@@ -430,6 +653,7 @@ function closeEditor() {
 }
 
 function unlockEditor() {
+  if (!refs.editorPassword) return;
   if (refs.editorPassword.value !== EDIT_PASSWORD) {
     refs.passwordMessage.textContent = "비밀번호가 맞지 않습니다.";
     refs.editorPassword.select();
@@ -441,7 +665,7 @@ function unlockEditor() {
 }
 
 function showEditorView() {
-  refs.passwordView.classList.add("hidden");
+  refs.passwordView?.classList.add("hidden");
   refs.editorView.classList.remove("hidden");
   renderEditorRows();
 }
@@ -457,7 +681,9 @@ function renderEditorRows() {
 
   refs.editorBody.innerHTML = baseMembers.map((member, index) => {
     const override = manualMap.get(manualKey(member)) || {};
+    const powerValue = valueFromManual(override, "power", member.powerValue);
     const previousPowerValue = valueFromManual(override, "previousPower", member.previousPowerValue);
+    const tobeolValue = valueFromManual(override, "tobeol", member.tobeolValue);
     const previousTobeolValue = valueFromManual(override, "previousTobeol", member.previousTobeolValue);
 
     return `
@@ -468,13 +694,13 @@ function renderEditorRows() {
           <div class="muted">${escapeHtml(member.job || "-")} · Lv.${member.level || "-"}</div>
         </td>
         <td>
-          <div class="readonly-value">${escapeHtml(formatKoreanPower(member.powerValue))}</div>
+          <input data-field="powerText" value="${escapeAttr(formatEditablePower(powerValue))}" placeholder="예: 1조 2345억" />
         </td>
         <td>
           <input data-field="previousPowerText" value="${escapeAttr(formatEditablePower(previousPowerValue))}" placeholder="예: 1조 2345억" />
         </td>
         <td>
-          <div class="readonly-value">${escapeHtml(formatKoreanPower(member.tobeolValue))}</div>
+          <input data-field="tobeolText" value="${escapeAttr(formatEditablePower(tobeolValue))}" placeholder="예: 987억" />
         </td>
         <td>
           <input data-field="previousTobeolText" value="${escapeAttr(formatEditablePower(previousTobeolValue))}" placeholder="예: 987억" />
@@ -499,18 +725,28 @@ function collectManualFromEditor() {
     const member = baseMembers[index];
     if (!member) continue;
 
+    const powerText = row.querySelector('[data-field="powerText"]')?.value.trim() || "";
     const previousPowerText = row.querySelector('[data-field="previousPowerText"]')?.value.trim() || "";
+    const tobeolText = row.querySelector('[data-field="tobeolText"]')?.value.trim() || "";
     const previousTobeolText = row.querySelector('[data-field="previousTobeolText"]')?.value.trim() || "";
     const memo = row.querySelector('[data-field="memo"]')?.value.trim() || "";
+
+    const powerValue = parseEditablePowerValue(powerText);
     const previousPowerValue = parseEditablePowerValue(previousPowerText);
+    const tobeolValue = parseEditablePowerValue(tobeolText);
     const previousTobeolValue = parseEditablePowerValue(previousTobeolText);
 
+    const basePower = nullableNumber(member.powerValue);
     const basePreviousPower = nullableNumber(member.previousPowerValue);
+    const baseTobeol = nullableNumber(member.tobeolValue);
     const basePreviousTobeol = nullableNumber(member.previousTobeolValue);
-    const powerChanged = !sameNullableNumber(previousPowerValue, basePreviousPower);
-    const tobeolChanged = !sameNullableNumber(previousTobeolValue, basePreviousTobeol);
 
-    if (!powerChanged && !tobeolChanged && !memo) continue;
+    const powerChanged = !sameNullableNumber(powerValue, basePower);
+    const previousPowerChanged = !sameNullableNumber(previousPowerValue, basePreviousPower);
+    const tobeolChanged = !sameNullableNumber(tobeolValue, baseTobeol);
+    const previousTobeolChanged = !sameNullableNumber(previousTobeolValue, basePreviousTobeol);
+
+    if (!powerChanged && !previousPowerChanged && !tobeolChanged && !previousTobeolChanged && !memo) continue;
 
     const item = {
       guild: member.guild,
@@ -518,11 +754,21 @@ function collectManualFromEditor() {
     };
 
     if (powerChanged) {
+      item.powerText = powerText;
+      item.powerValue = powerValue;
+    }
+
+    if (previousPowerChanged) {
       item.previousPowerText = previousPowerText;
       item.previousPowerValue = previousPowerValue;
     }
 
     if (tobeolChanged) {
+      item.tobeolText = tobeolText;
+      item.tobeolValue = tobeolValue;
+    }
+
+    if (previousTobeolChanged) {
       item.previousTobeolText = previousTobeolText;
       item.previousTobeolValue = previousTobeolValue;
     }
@@ -538,23 +784,25 @@ async function applyManualFromEditor() {
   const manual = collectManualFromEditor();
   refs.applyManual.disabled = true;
   refs.editorMessage.textContent = state.manualClient?.enabled
-    ? "서버에 수동 기준값을 저장 중입니다..."
+    ? "서버에 수동 보정값을 저장 중입니다..."
     : "Firebase 설정 전이라 이 브라우저에 저장 중입니다...";
 
   try {
     if (state.manualClient?.enabled) {
       await state.manualClient.saveManual(manual);
       state.serverManual = manual;
-      refs.editorMessage.textContent = `수동 기준값 ${manual.items.length}건을 서버에 저장했습니다. 새로고침 후에도 전체 사용자에게 동일하게 반영됩니다.`;
+      refs.editorMessage.textContent = `수동 보정값 ${manual.items.length}건을 서버에 저장했습니다. 새로고침 후에도 전체 사용자에게 동일하게 반영됩니다.`;
     } else {
       state.localManual = manual;
       localStorage.setItem(LOCAL_MANUAL_KEY, JSON.stringify(manual));
-      refs.editorMessage.textContent = `수동 기준값 ${manual.items.length}건을 이 브라우저에 저장했습니다. Firebase 설정을 완료하면 전체 사용자에게 반영됩니다.`;
+      refs.editorMessage.textContent = `수동 보정값 ${manual.items.length}건을 이 브라우저에 저장했습니다. Firebase 설정을 완료하면 전체 사용자에게 반영됩니다.`;
     }
 
     rebuildData();
     initGuildFilter();
+    initVisualFilters();
     render();
+    if (state.page === "characters") renderCharactersPage();
   } catch (error) {
     refs.editorMessage.textContent = `저장 실패: ${error.message}`;
   } finally {
@@ -569,22 +817,23 @@ async function clearLocalManual() {
     items: []
   };
 
-  if (!confirm("저장된 수동 기준값을 초기화할까요?")) return;
+  if (!confirm("저장된 수동 보정값을 초기화할까요?")) return;
 
   refs.clearManual.disabled = true;
   try {
     if (state.manualClient?.enabled) {
       await state.manualClient.saveManual(emptyManual);
       state.serverManual = emptyManual;
-      refs.editorMessage.textContent = "서버에 저장된 수동 기준값을 초기화했습니다.";
+      refs.editorMessage.textContent = "서버에 저장된 수동 보정값을 초기화했습니다.";
     } else {
       localStorage.removeItem(LOCAL_MANUAL_KEY);
       state.localManual = null;
-      refs.editorMessage.textContent = "이 브라우저에 저장된 수동 기준값을 초기화했습니다.";
+      refs.editorMessage.textContent = "이 브라우저에 저장된 수동 보정값을 초기화했습니다.";
     }
 
     rebuildData();
     render();
+    if (state.page === "characters") renderCharactersPage();
     renderEditorRows();
   } catch (error) {
     refs.editorMessage.textContent = `초기화 실패: ${error.message}`;
@@ -635,6 +884,9 @@ function initManualClient() {
       if (state.page === "dashboard") {
         render();
         if (state.editorUnlocked && refs.editDialog.open) renderEditorRows();
+      }
+      if (state.page === "characters") {
+        renderCharactersPage();
       }
     },
     onError: (error) => {
@@ -925,27 +1177,43 @@ function applyManualOverrides(data, manual) {
     const override = manualMap.get(manualKey(member));
     if (!override) return member;
 
-    const hasPreviousPower = override.previousPowerValue != null || override.previousPowerText;
-    const hasPreviousTobeol = override.previousTobeolValue != null || override.previousTobeolText;
+    const hasPower = hasManualValue(override, "power");
+    const hasPreviousPower = hasManualValue(override, "previousPower");
+    const hasTobeol = hasManualValue(override, "tobeol");
+    const hasPreviousTobeol = hasManualValue(override, "previousTobeol");
     const next = {
       ...member,
-      isManual: Boolean(hasPreviousPower || hasPreviousTobeol || override.memo),
+      isManual: Boolean(hasPower || hasPreviousPower || hasTobeol || hasPreviousTobeol || override.memo),
       manualMemo: override.memo || ""
     };
 
-    // 현재 전투력/현재 토벌전은 자동 수집값이므로 수동 보정하지 않습니다.
-    // 수동 입력은 7일 전 기준값에만 적용합니다.
+    if (hasPower) {
+      next.powerValue = valueFromManual(override, "power", next.powerValue);
+      next.powerText = next.powerValue == null ? "" : formatKoreanPower(next.powerValue);
+    }
+
     if (hasPreviousPower) {
       next.previousPowerValue = valueFromManual(override, "previousPower", next.previousPowerValue);
       next.previousPowerText = next.previousPowerValue == null ? "" : formatKoreanPower(next.previousPowerValue);
+    }
+
+    if (hasPower || hasPreviousPower) {
       next.powerGrowthValue = next.previousPowerValue == null ? null : Number(next.powerValue || 0) - Number(next.previousPowerValue || 0);
       next.powerGrowthText = next.powerGrowthValue == null ? null : formatSignedKoreanPower(next.powerGrowthValue);
       next.powerGrowthRate = calcGrowthRate(next.powerValue, next.previousPowerValue);
     }
 
+    if (hasTobeol) {
+      next.tobeolValue = valueFromManual(override, "tobeol", next.tobeolValue);
+      next.tobeolText = next.tobeolValue == null ? "" : formatKoreanPower(next.tobeolValue);
+    }
+
     if (hasPreviousTobeol) {
       next.previousTobeolValue = valueFromManual(override, "previousTobeol", next.previousTobeolValue);
       next.previousTobeolText = next.previousTobeolValue == null ? "" : formatKoreanPower(next.previousTobeolValue);
+    }
+
+    if (hasTobeol || hasPreviousTobeol) {
       next.tobeolGrowthValue = next.previousTobeolValue == null ? null : Number(next.tobeolValue || 0) - Number(next.previousTobeolValue || 0);
       next.tobeolGrowthText = next.tobeolGrowthValue == null ? null : formatSignedKoreanPower(next.tobeolGrowthValue);
       next.tobeolGrowthRate = calcGrowthRate(next.tobeolValue, next.previousTobeolValue);
@@ -953,6 +1221,10 @@ function applyManualOverrides(data, manual) {
 
     return next;
   });
+}
+
+function hasManualValue(item, prefix) {
+  return item?.[`${prefix}Value`] !== undefined || item?.[`${prefix}Text`] !== undefined;
 }
 
 
@@ -1108,35 +1380,68 @@ function renderTable() {
 
   refs.panelTitle.textContent = table.title;
   refs.panelDesc.textContent = table.desc;
-  
-  // 1. 데스크탑용 테이블 렌더링
   refs.tableHead.innerHTML = `<tr>${table.columns.map((column) => `<th>${column.label}</th>`).join("")}</tr>`;
-  
-  // 2. 모바일용 카드 리스트 렌더링 (테이블과 별도로 컨테이너 필요)
-  // 만약 html에 .mobile-card-list div가 없다면 panel 안에 하나 추가해주세요.
-  let cardHtml = '';
-  
+
   if (members.length === 0) {
     refs.tableBody.innerHTML = `<tr><td colspan="${table.columns.length}" class="empty">표시할 데이터가 없습니다.</td></tr>`;
-    cardHtml = '<div class="empty">표시할 데이터가 없습니다.</div>';
-  } else {
-    refs.tableBody.innerHTML = members.map((member, index) => `
-      <tr class="${member.isManual ? "manual-row" : ""}">
-        ${table.columns.map((column) => `<td>${column.render(member, index)}</td>`).join("")}
-      </tr>
-    `).join("");
-
-    // 카드 형태의 모바일 데이터 생성 (간단히 닉네임 + 핵심지표 2개만 보여줌)
-    cardHtml = members.map(m => `
-      <div class="mobile-card-item">
-        <div><strong>${m.nickname}</strong><span>Lv.${m.level}</span></div>
-        <div><span>전투력</span><span>${formatKoreanPower(m.powerValue)}</span></div>
-        <div><span>성장률</span><span>${renderRate(m.powerGrowthRate)}</span></div>
-      </div>
-    `).join("");
+    if (refs.mobileCardList) {
+      refs.mobileCardList.innerHTML = `<div class="empty mobile-empty">표시할 데이터가 없습니다.</div>`;
+    }
+    return;
   }
 
-  // 모바일 카드 리스트를 넣을 공간(ID가 mobile-card-list인 div 등)을 panel 안에 추가하고 아래 코드 실행
-  const cardList = document.getElementById('mobile-card-list');
-  if (cardList) cardList.innerHTML = cardHtml;
+  refs.tableBody.innerHTML = members.map((member, index) => `
+    <tr class="${member.isManual ? "manual-row" : ""}">
+      ${table.columns.map((column) => `<td>${column.render(member, index)}</td>`).join("")}
+    </tr>
+  `).join("");
+
+  if (refs.mobileCardList) {
+    refs.mobileCardList.innerHTML = members.map((member, index) => renderMemberCard(member, index)).join("");
+  }
 }
+
+function renderMemberCard(member, index) {
+  const isTobeol = state.tab === "tobeol";
+  const currentLabel = isTobeol ? "현재 점수" : "현재 전투력";
+  const previousLabel = isTobeol ? "7일 전 점수" : "7일 전 전투력";
+  const currentValue = isTobeol ? formatKoreanPower(member.tobeolValue) : formatKoreanPower(member.powerValue);
+  const previousValue = isTobeol ? (member.previousTobeolText || "-") : (member.previousPowerText || "-");
+  const growthValue = isTobeol
+    ? renderGrowth(member.tobeolGrowthValue, member.tobeolGrowthText)
+    : renderGrowth(member.powerGrowthValue, member.powerGrowthText);
+  const rateValue = isTobeol ? renderRate(member.tobeolGrowthRate) : renderRate(member.powerGrowthRate);
+  const rank = member.rank ? `#${escapeHtml(member.rank)}` : `#${index + 1}`;
+  const manualBadge = member.isManual ? `<span class="manual-badge">수동</span>` : "";
+
+  return `
+    <article class="member-card ${member.isManual ? "manual-card" : ""}">
+      <div class="member-card-top">
+        <div>
+          <div class="member-name">${escapeHtml(member.nickname || "-")} ${manualBadge}</div>
+          <div class="member-sub">${escapeHtml(member.job || "-")} · Lv.${escapeHtml(member.level || "-")}</div>
+        </div>
+        <div class="member-rank">
+          <span>${rank}</span>
+          ${renderGuild(member)}
+        </div>
+      </div>
+      <div class="member-metrics">
+        ${renderMetric(currentLabel, escapeHtml(currentValue))}
+        ${renderMetric(previousLabel, escapeHtml(previousValue))}
+        ${renderMetric("성장", growthValue)}
+        ${renderMetric("성장률", rateValue)}
+      </div>
+    </article>
+  `;
+}
+
+function renderMetric(label, value) {
+  return `
+    <div class="metric">
+      <span>${escapeHtml(label)}</span>
+      <strong>${value}</strong>
+    </div>
+  `;
+}
+

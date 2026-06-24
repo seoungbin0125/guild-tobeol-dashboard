@@ -437,7 +437,7 @@ function applyManualOverridesToMembers(members, manual, today) {
   }
 
   if (manual.date && manual.date !== today) {
-    console.log(`ℹ️ 수동 기준값 날짜가 오늘과 달라 적용하지 않습니다: manual=${manual.date}, today=${today}`);
+    console.log(`ℹ️ 수동 보정값 날짜가 오늘과 달라 적용하지 않습니다: manual=${manual.date}, today=${today}`);
     return 0;
   }
 
@@ -454,25 +454,45 @@ function applyManualOverridesToMembers(members, manual, today) {
     if (!override) continue;
 
     let applied = false;
+    const hasPower = hasManualValue(override, "power");
+    const hasPreviousPower = hasManualValue(override, "previousPower");
+    const hasTobeol = hasManualValue(override, "tobeol");
+    const hasPreviousTobeol = hasManualValue(override, "previousTobeol");
 
-    // 현재 전투력/현재 토벌전은 수집값을 그대로 사용하고,
-    // 수동 입력은 7일 전 기준값에만 적용합니다.
-    if (override.previousPowerValue != null || override.previousPowerText) {
-      member.previousPowerValue = manualValue(override, "previousPower", member.previousPowerValue);
-      member.previousPowerText = member.previousPowerValue == null ? null : formatKoreanPower(member.previousPowerValue);
-      member.powerGrowthValue = member.previousPowerValue == null ? null : Number(member.powerValue || 0) - Number(member.previousPowerValue || 0);
-      member.powerGrowthText = member.powerGrowthValue == null ? null : formatSignedKoreanPower(member.powerGrowthValue);
-      member.powerGrowthRate = calcGrowthRate(member.powerValue, member.previousPowerValue);
+    if (hasPower) {
+      member.powerValue = manualValue(override, "power", member.powerValue);
+      member.powerText = member.powerValue == null ? null : formatKoreanPower(member.powerValue);
       applied = true;
     }
 
-    if (override.previousTobeolValue != null || override.previousTobeolText) {
+    if (hasPreviousPower) {
+      member.previousPowerValue = manualValue(override, "previousPower", member.previousPowerValue);
+      member.previousPowerText = member.previousPowerValue == null ? null : formatKoreanPower(member.previousPowerValue);
+      applied = true;
+    }
+
+    if (hasPower || hasPreviousPower) {
+      member.powerGrowthValue = member.previousPowerValue == null ? null : Number(member.powerValue || 0) - Number(member.previousPowerValue || 0);
+      member.powerGrowthText = member.powerGrowthValue == null ? null : formatSignedKoreanPower(member.powerGrowthValue);
+      member.powerGrowthRate = calcGrowthRate(member.powerValue, member.previousPowerValue);
+    }
+
+    if (hasTobeol) {
+      member.tobeolValue = manualValue(override, "tobeol", member.tobeolValue);
+      member.tobeolText = member.tobeolValue == null ? null : formatKoreanPower(member.tobeolValue);
+      applied = true;
+    }
+
+    if (hasPreviousTobeol) {
       member.previousTobeolValue = manualValue(override, "previousTobeol", member.previousTobeolValue);
       member.previousTobeolText = member.previousTobeolValue == null ? null : formatKoreanPower(member.previousTobeolValue);
+      applied = true;
+    }
+
+    if (hasTobeol || hasPreviousTobeol) {
       member.tobeolGrowthValue = member.previousTobeolValue == null ? null : Number(member.tobeolValue || 0) - Number(member.previousTobeolValue || 0);
       member.tobeolGrowthText = member.tobeolGrowthValue == null ? null : formatSignedKoreanPower(member.tobeolGrowthValue);
       member.tobeolGrowthRate = calcGrowthRate(member.tobeolValue, member.previousTobeolValue);
-      applied = true;
     }
 
     if (applied || override.memo) {
@@ -483,10 +503,14 @@ function applyManualOverridesToMembers(members, manual, today) {
   }
 
   if (appliedCount > 0) {
-    console.log(`✅ 수동 기준값 ${appliedCount}건 적용`);
+    console.log(`✅ 수동 보정값 ${appliedCount}건 적용`);
   }
 
   return appliedCount;
+}
+
+function hasManualValue(item, prefix) {
+  return item?.[`${prefix}Value`] !== undefined || item?.[`${prefix}Text`] !== undefined;
 }
 
 

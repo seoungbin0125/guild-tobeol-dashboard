@@ -106,7 +106,7 @@ export function createManualOverrideClient({
   const db = getFirestore(app);
   const manualRef = doc(db, collectionName, documentId || "current");
 
-  onStatus?.("connecting", "수동 기준값 서버 연결 중...");
+  onStatus?.("connecting", "수동 보정값 서버 연결 중...");
 
   const unsubscribe = onSnapshot(
     manualRef,
@@ -115,11 +115,11 @@ export function createManualOverrideClient({
         ? normalizeFirestoreManual(snapshot.data())
         : null;
       onManual?.(manual);
-      onStatus?.("online", manual?.items?.length ? `수동 기준값 ${manual.items.length}건 적용 중` : "수동 기준값 없음");
+      onStatus?.("online", manual?.items?.length ? `수동 보정값 ${manual.items.length}건 적용 중` : "수동 보정값 없음");
     },
     (error) => {
       onError?.(error);
-      onStatus?.("error", `수동 기준값 연결 실패: ${error.message}`);
+      onStatus?.("error", `수동 보정값 연결 실패: ${error.message}`);
     }
   );
 

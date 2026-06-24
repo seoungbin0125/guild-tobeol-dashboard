@@ -16,6 +16,7 @@
       </div>
       <div class="hero-actions main-nav" aria-label="메인 메뉴">
         <button class="main-tab active" data-page="dashboard" type="button">현황</button>
+        <button class="main-tab" data-page="characters" type="button">캐릭터</button>
         <button class="main-tab" data-page="guide" type="button">공략</button>
         <button class="main-tab" data-page="links" type="button">링크</button>
         <button class="main-tab" data-page="rest" type="button">쉬어가기</button>
@@ -35,8 +36,8 @@
 
       <section class="manual-guide" id="manual-guide">
         <div>
-          <strong>수동 보정이 필요하면 오른쪽 버튼을 눌러 입력하세요.</strong>
-          <p>비밀번호 입력 후 <strong>7일 전 전투력</strong>과 <strong>7일 전 토벌전 점수</strong>만 수정할 수 있습니다. 현재 전투력/현재 토벌전은 자동 수집값이라 수정되지 않습니다.</p>
+          <strong>수동 보정이 필요하면 오른쪽 버튼을 눌러 바로 입력하세요.</strong>
+          <p><strong>현재 전투력</strong>, <strong>현재 토벌전 점수</strong>, <strong>7일 전 기준값</strong>을 모두 수정할 수 있습니다. 저장하면 성장/성장률도 다시 계산됩니다.</p>
         </div>
         <div class="manual-actions">
           <button id="open-editor-guide" type="button">수정하기</button>
@@ -73,13 +74,54 @@
           <h2 id="panel-title">전투력 성장</h2>
           <p id="panel-desc">최신 수집 데이터 기준입니다.</p>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap" aria-label="길드원 데이터 표">
           <table>
             <thead id="table-head"></thead>
             <tbody id="table-body"></tbody>
           </table>
         </div>
+        <div class="mobile-card-list" id="mobile-card-list" aria-label="길드원 데이터 카드 목록"></div>
       </section>
+    </section>
+
+
+
+    <section class="content-page" id="page-characters">
+      <section class="visual-hero">
+        <div>
+          <p class="eyebrow mini">Character Gallery</p>
+          <h2>길드 캐릭터 한눈에 보기</h2>
+          <p class="muted">MGF 캐릭터 이미지를 불러와 전투력, 토벌전 점수, 변화량을 카드로 같이 보여줍니다.</p>
+        </div>
+        <div class="visual-stats" id="visual-stats"></div>
+      </section>
+
+      <section class="toolbar visual-toolbar">
+        <label>
+          길드
+          <select id="visual-guild-filter">
+            <option value="all">전체</option>
+          </select>
+        </label>
+        <label>
+          검색
+          <input id="visual-keyword" type="search" placeholder="닉네임 / 직업 / 길드" />
+        </label>
+        <label>
+          정렬
+          <select id="visual-sort">
+            <option value="powerGrowth">전투력 변화 높은순</option>
+            <option value="power">현재 전투력 높은순</option>
+            <option value="tobeolGrowth">토벌전 변화 높은순</option>
+            <option value="tobeol">토벌전 점수 높은순</option>
+            <option value="level">레벨 높은순</option>
+            <option value="rank">길드 순위순</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="visual-overview" id="visual-overview"></section>
+      <section class="character-grid" id="character-grid" aria-label="길드 캐릭터 이미지 목록"></section>
     </section>
 
     <section class="content-page" id="page-guide">
@@ -155,24 +197,15 @@
         <div>
           <p class="eyebrow mini">Manual Edit</p>
           <h2>수동 입력</h2>
-          <p id="edit-desc">현재 값은 읽기 전용이며, 7일 전 기준값만 수정할 수 있습니다. 저장하면 전체 사용자에게 바로 반영됩니다.</p>
+          <p id="edit-desc">비밀번호 없이 바로 수정할 수 있습니다. 현재 값과 7일 전 기준값을 저장하면 전체 사용자에게 바로 반영됩니다.</p>
         </div>
         <button class="icon-btn" id="close-editor" type="button" aria-label="닫기">×</button>
       </div>
 
-      <div class="password-view" id="password-view">
-        <label>
-          비밀번호
-          <input id="editor-password" type="password" inputmode="numeric" autocomplete="off" placeholder="비밀번호 입력" />
-        </label>
-        <button class="primary-btn" id="unlock-editor" type="button">확인</button>
-        <p class="edit-message" id="password-message"></p>
-      </div>
-
-      <div class="editor-view hidden" id="editor-view">
+      <div class="editor-view" id="editor-view">
         <div class="editor-actions">
           <button class="primary-btn" id="apply-manual" type="button">서버에 저장</button>
-          <button class="danger-btn" id="clear-manual" type="button">수동 기준값 초기화</button>
+          <button class="danger-btn" id="clear-manual" type="button">수동 보정값 초기화</button>
         </div>
         <p class="edit-message" id="editor-message"></p>
         <div class="editor-table-wrap">
