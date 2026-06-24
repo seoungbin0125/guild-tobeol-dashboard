@@ -43,7 +43,10 @@ async function run() {
   for (const guildName of guildNames) {
     console.log(`\n[길드 수집] ${guildName}`);
 
-    const guildHtml = await fetchHtml(guildInfoUrl(guildName));
+    const sourceUrl = guildInfoUrl(guildName);
+    console.log(`↳ 기준 URL: ${sourceUrl}`);
+
+    const guildHtml = await fetchHtml(sourceUrl);
     const members = parseGuildMembersFromText(htmlToText(guildHtml))
       .slice(0, memberLimit)
       .map((member) => ({
@@ -58,7 +61,7 @@ async function run() {
       console.log(`✅ ${guildName} 길드원 ${members.length}명 수집 완료`);
     }
 
-    guildResults.push({ guild: guildName, members });
+    guildResults.push({ guild: guildName, members, sourceUrl });
     await sleep(350);
   }
 
@@ -84,7 +87,7 @@ async function run() {
 
   const departedMembersByGuild = {};
 
-  const mergedMembers = guildResults.flatMap(({ guild, members }) => {
+  const mergedMembers = guildResults.flatMap(({ guild, members, sourceUrl }) => {
     const previousSnapshot = previousSnapshotsByGuild.get(guild);
     const previousMembers = previousSnapshot?.members || [];
     const previousMemberMap = new Map(
@@ -116,13 +119,14 @@ async function run() {
 
       return {
         guild,
+        sourceUrl,
         memberStatus,
         rank: member.rank,
         nickname,
         job: member.job,
         level: member.level,
         powerValue: member.powerValue,
-        powerText: formatKoreanPower(member.powerValue),
+        powerText: member.powerText || formatKoreanPower(member.powerValue),
         previousPowerValue: previous?.powerValue ?? null,
         previousPowerText: previous ? formatKoreanPower(previous.powerValue) : null,
         powerGrowthValue,
@@ -154,6 +158,8 @@ async function run() {
       guildNames.map((guild) => [guild, previousSnapshotsByGuild.get(guild)?.date || null])
     ),
     comparisonDateText: buildComparisonDateText(guildNames, previousSnapshotsByGuild, comparisonTargetDate),
+    dataSource: "MGF guild_info",
+    sourceUrls: Object.fromEntries(guildResults.map((item) => [item.guild, item.sourceUrl])),
     summary: buildSummary(mergedMembers),
     manualAppliedCount,
     memberChanges: buildMemberChanges(guildNames, mergedMembers, departedMembersByGuild),
@@ -170,6 +176,7 @@ async function run() {
   const nextHistory = upsertHistoryList(history, guildNames.map((guild) => ({
     date: today,
     guild,
+    sourceUrl: guildInfoUrl(guild),
     members: mergedMembers
       .filter((member) => member.guild === guild)
       .map((member) => ({
@@ -299,7 +306,7 @@ function parseGuildMembersFromText(textContent) {
       job,
       level,
       powerValue: power.value,
-      powerText: power.text
+      powerText: normalizeKoreanPowerText(power.text) || power.text
     });
   }
 
@@ -390,6 +397,22 @@ function decodeHtmlEntities(value) {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#039;/g, "'");
+}
+
+function normalizeKoreanPowerText(text) {
+  const source = String(text || "").replace(/,/g, " ").replace(/\s+/g, " ").trim();
+  const parts = [];
+
+  for (const unit of ["경", "조", "억", "만"]) {
+    const pattern = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*${unit}`, "g");
+    const matches = [...source.matchAll(pattern)].map((item) => item[1]);
+    if (matches.length) {
+      const value = matches[matches.length - 1];
+      if (Number(value) > 0) parts.push(`${value}${unit}`);
+    }
+  }
+
+  return parts.join(" ");
 }
 
 function parseKoreanPowerValue(text) {

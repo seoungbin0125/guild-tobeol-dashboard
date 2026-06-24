@@ -1,7 +1,7 @@
 import { FIREBASE_COLLECTION, FIREBASE_CONFIG, FIREBASE_GAME_COLLECTION, FIREBASE_LOBBY_COLLECTION, FIREBASE_MANUAL_COLLECTION } from "./firebase-config.js";
 import { createGuideBoardClient, createJellyGameClient, createManualOverrideClient, createVirtualLobbyClient, isFirebaseConfigured } from "./firebase-board.js";
 
-const APP_VERSION = "v1.13.0";
+const APP_VERSION = "v1.14.0";
 const EDIT_PASSWORD = "5645";
 const LOCAL_MANUAL_KEY = "guild-tobeol-dashboard.manual.v1";
 const LOCAL_POSTS_KEY = "guild-tobeol-dashboard.guide-posts.v1";
@@ -793,8 +793,9 @@ function render() {
   if (state.page !== "dashboard") return;
 
   const editText = data.manualAppliedCount > 0 ? ` · 수정 ${data.manualAppliedCount}건 반영` : "";
+  const sourceText = data.dataSource === "MGF guild_info" ? " · 기준: MGF 길드 상세" : "";
   const comparisonText = getComparisonDateText(data, state.guildFilter);
-  refs.footerText.textContent = `${APP_VERSION} · ${selectedGuildText || "-"} · 현재 ${data.capturedDate || "-"} 수집 · 7일 전 비교 ${comparisonText}${editText}`;
+  refs.footerText.textContent = `${APP_VERSION} · ${selectedGuildText || "-"} · 현재 ${data.capturedDate || "-"} 수집${sourceText} · 7일 전 비교 ${comparisonText}${editText}`;
 }
 
 function getComparisonDateText(data, guildFilter) {
@@ -979,7 +980,7 @@ function renderCharacterCard(member, index, max) {
         <p>${escapeHtml(member.job || "-")} · Lv.${escapeHtml(member.level || "-")}</p>
       </div>
       <div class="character-bars">
-        ${renderCharacterBar("전투력", formatKoreanPower(member.powerValue), percentOf(member.powerValue, max.power), "") }
+        ${renderCharacterBar("전투력", member.powerText || formatKoreanPower(member.powerValue), percentOf(member.powerValue, max.power), "") }
         ${renderCharacterBar("전투력 변화", powerGrowth == null ? "비교 없음" : formatSignedKoreanPower(powerGrowth), percentOf(Math.abs(powerGrowth || 0), max.powerGrowth), growthClass(powerGrowth))}
         ${renderCharacterBar("토벌전", formatKoreanPower(member.tobeolValue), percentOf(member.tobeolValue, max.tobeol), "") }
         ${renderCharacterBar("토벌전 변화", tobeolGrowth == null ? "비교 없음" : formatSignedKoreanPower(tobeolGrowth), percentOf(Math.abs(tobeolGrowth || 0), max.tobeolGrowth), growthClass(tobeolGrowth))}
@@ -1108,7 +1109,7 @@ function renderVirtualSelected(member) {
   const cooldownRemaining = Math.max(0, state.virtualAttackCooldownUntil - Date.now());
 
   if (refs.virtualSelectedName) refs.virtualSelectedName.textContent = `${member.nickname || "-"} · ${member.job || "-"}`;
-  if (refs.virtualPower) refs.virtualPower.textContent = formatKoreanPower(member.powerValue);
+  if (refs.virtualPower) refs.virtualPower.textContent = member.powerText || formatKoreanPower(member.powerValue);
   if (refs.virtualHp) refs.virtualHp.textContent = state.virtualJoined ? `${formatKoreanPower(hp)} / ${formatKoreanPower(maxHp)}` : formatKoreanPower(maxHp);
   const shieldRemaining = getVirtualShieldRemaining(me);
   if (refs.virtualState) refs.virtualState.textContent = jailRemaining > 0
@@ -2510,7 +2511,7 @@ function getTableSpec(tab) {
       col("길드순위", (member) => `<span class="badge">${member.rank}</span>`),
       col("닉네임", renderName),
       col("레벨", (member) => `Lv.${member.level}`),
-      col("현재 전투력", (member) => formatKoreanPower(member.powerValue)),
+      col("현재 전투력", (member) => member.powerText || formatKoreanPower(member.powerValue)),
       col("7일 전 전투력", (member) => member.previousPowerText || "-"),
       col("성장", (member) => renderGrowth(member.powerGrowthValue, member.powerGrowthText)),
       col("성장률", (member) => renderRate(member.powerGrowthRate))
@@ -3338,7 +3339,7 @@ function renderMemberCard(member, index) {
   const isTobeol = state.tab === "tobeol";
   const currentLabel = isTobeol ? "현재 점수" : "현재 전투력";
   const previousLabel = isTobeol ? "7일 전 점수" : "7일 전 전투력";
-  const currentValue = isTobeol ? formatKoreanPower(member.tobeolValue) : formatKoreanPower(member.powerValue);
+  const currentValue = isTobeol ? (member.tobeolText || formatKoreanPower(member.tobeolValue)) : (member.powerText || formatKoreanPower(member.powerValue));
   const previousValue = isTobeol ? (member.previousTobeolText || "-") : (member.previousPowerText || "-");
   const growthValue = isTobeol
     ? renderGrowth(member.tobeolGrowthValue, member.tobeolGrowthText)

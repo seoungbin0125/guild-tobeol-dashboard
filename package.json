@@ -1,6 +1,6 @@
 {
   "name": "guild-tobeol-dashboard",
-  "version": "1.13.0",
+  "version": "1.14.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,9 @@
     "serve": "node scripts/serve.js",
     "collect:contents": "GUILD_CONTENT_NAMES=반짝 node scripts/collect-guild-contents.js",
     "collect:hotdeals": "node scripts/collect-hotdeals.js",
-    "collect:all-data": "npm run collect:all && npm run collect:contents && npm run collect:hotdeals"
+    "collect:all-data": "npm run collect:all && npm run collect:contents && npm run collect:hotdeals",
+    "collect:mgf": "node scripts/collect-data.js",
+    "collect:dashboard": "npm run collect:all-data"
   },
   "devDependencies": {}
 }
