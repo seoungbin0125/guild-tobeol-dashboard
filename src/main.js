@@ -8,6 +8,10 @@ const LOCAL_VIRTUAL_KEY = "guild-tobeol-dashboard.virtual-user.v1";
 const LOCAL_CHAT_KEY = "guild-tobeol-dashboard.virtual-chat.v1";
 const LOCAL_GAME_KEY = "guild-tobeol-dashboard.jelly-user.v1";
 const LOCAL_GAME_EVENTS_KEY = "guild-tobeol-dashboard.jelly-events.v1";
+const VIRTUAL_JAIL_MS = 5000;
+const VIRTUAL_ATTACK_COOLDOWN_MS = 1200;
+const VIRTUAL_ATTACK_RANGE = 13.5;
+const VIRTUAL_JAIL_POSITION = { x: 50, y: 88 };
 
 const state = {
   rawData: null,
@@ -39,6 +43,11 @@ const state = {
   virtualMessages: [],
   virtualPosition: { x: 50, y: 54 },
   virtualStatus: "",
+  virtualLoopTimer: null,
+  virtualLastSyncAt: 0,
+  virtualAttackCooldownUntil: 0,
+  virtualActionMessage: "",
+  virtualLastAttackedAt: "",
   virtualUserId: getOrCreateVirtualUserId(),
   gameSelectedKey: "",
   gameTeam: "solo",
@@ -58,6 +67,9 @@ const state = {
   gameSafeUntil: 0,
   gameLastEatenAt: "",
   gameUserId: getOrCreateGameUserId(),
+  guildContents: null,
+  contentsGuild: "반짝",
+  contentsMode: "league",
   editorUnlocked: true
 };
 
@@ -93,7 +105,10 @@ const refs = {
   virtualOnlineCount: document.getElementById("virtual-online-count"),
   virtualSelectedName: document.getElementById("virtual-selected-name"),
   virtualPower: document.getElementById("virtual-power"),
+  virtualHp: document.getElementById("virtual-hp"),
+  virtualState: document.getElementById("virtual-state"),
   virtualTobeol: document.getElementById("virtual-tobeol"),
+  virtualAttack: document.getElementById("virtual-attack"),
   virtualChatList: document.getElementById("virtual-chat-list"),
   virtualChatInput: document.getElementById("virtual-chat-input"),
   virtualChatSend: document.getElementById("virtual-chat-send"),
@@ -116,6 +131,11 @@ const refs = {
   gameMass: document.getElementById("game-mass"),
   gameScore: document.getElementById("game-score"),
   gameNudgeButtons: document.querySelectorAll("[data-game-move]"),
+  contentsTabs: document.querySelectorAll(".contents-tab"),
+  contentsGuildSelect: document.getElementById("contents-guild-select"),
+  contentsSourceLink: document.getElementById("contents-source-link"),
+  contentsSummary: document.getElementById("contents-summary"),
+  contentsGrid: document.getElementById("contents-grid"),
   footerText: document.getElementById("footer-text"),
   editDialog: document.getElementById("edit-dialog"),
   openEditor: document.getElementById("open-editor"),
@@ -157,10 +177,11 @@ async function init() {
   bindEvents();
 
   try {
-    const [latest, manual, posts] = await Promise.all([
+    const [latest, manual, posts, guildContents] = await Promise.all([
       fetchJson("data/latest.json", true),
       fetchJson("data/manual.json", false),
-      fetchJson("data/guide-posts.json", false)
+      fetchJson("data/guide-posts.json", false),
+      fetchJson("data/guild-contents.json", false)
     ]);
 
     state.rawData = latest;
@@ -168,6 +189,7 @@ async function init() {
     state.localManual = readLocalManual();
     state.postsFromFile = normalizePosts(posts);
     state.localPosts = readLocalPosts();
+    state.guildContents = normalizeGuildContents(guildContents);
     initFirebaseBoard();
     initManualClient();
     rebuildPosts();
@@ -175,11 +197,8 @@ async function init() {
     initGuildFilter();
     initVisualFilters();
     initVirtualPicker();
-    initGamePicker();
-    initGameFood();
-    initGameBots();
+    initContentsFilters();
     initVirtualLobbyClient();
-    initJellyGameClient();
     renderPage();
   } catch (error) {
     refs.tableBody.innerHTML = `<tr><td colspan="99" class="empty">${escapeHtml(error.message)}</td></tr>`;
@@ -244,6 +263,19 @@ function bindEvents() {
     renderCharactersPage();
   });
 
+  refs.contentsTabs?.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      state.contentsMode = tab.dataset.contentMode || "league";
+      refs.contentsTabs.forEach((item) => item.classList.toggle("active", item === tab));
+      renderGuildContentsPage();
+    });
+  });
+
+  refs.contentsGuildSelect?.addEventListener("change", (event) => {
+    state.contentsGuild = event.target.value || "반짝";
+    renderGuildContentsPage();
+  });
+
   refs.virtualCharacterSelect?.addEventListener("change", (event) => {
     state.virtualSelectedKey = event.target.value;
     if (state.virtualJoined) joinVirtualLobby(true);
@@ -251,6 +283,7 @@ function bindEvents() {
   });
 
   refs.virtualJoin?.addEventListener("click", () => joinVirtualLobby(false));
+  refs.virtualAttack?.addEventListener("click", attackNearestVirtualParticipant);
   refs.virtualLeave?.addEventListener("click", leaveVirtualLobby);
   refs.virtualRandom?.addEventListener("click", moveVirtualRandom);
   refs.virtualStage?.addEventListener("click", handleVirtualStageClick);
@@ -331,8 +364,8 @@ function renderPage() {
     return;
   }
 
-  if (state.page === "game") {
-    renderGamePage();
+  if (state.page === "contents") {
+    renderGuildContentsPage();
     return;
   }
 
@@ -418,6 +451,149 @@ function initVirtualPicker() {
   refs.virtualCharacterSelect.value = state.virtualSelectedKey;
 }
 
+
+function initContentsFilters() {
+  if (!refs.contentsGuildSelect) return;
+  const bundles = getGuildContentBundles();
+  const keywords = bundles.length
+    ? bundles.map((item) => item.keyword)
+    : [state.contentsGuild || "반짝"];
+
+  if (!keywords.includes(state.contentsGuild)) state.contentsGuild = keywords[0] || "반짝";
+
+  refs.contentsGuildSelect.innerHTML = keywords.map((keyword) =>
+    `<option value="${escapeAttr(keyword)}">${escapeHtml(keyword)}</option>`
+  ).join("");
+  refs.contentsGuildSelect.value = state.contentsGuild;
+}
+
+function renderGuildContentsPage() {
+  refs.title.textContent = "길드 컨텐츠";
+  refs.subtitle.textContent = "대항전 · 수련장 · 보스대전 매칭을 한 화면에서 확인";
+
+  refs.contentsTabs?.forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.contentMode === state.contentsMode);
+  });
+  if (refs.contentsGuildSelect) refs.contentsGuildSelect.value = state.contentsGuild;
+
+  const bundle = getSelectedGuildContentBundle();
+  const modeData = bundle?.modes?.[state.contentsMode] || null;
+  const url = modeData?.url || makeGuildContentsUrl(state.contentsMode, state.contentsGuild);
+  if (refs.contentsSourceLink) refs.contentsSourceLink.href = url;
+
+  renderGuildContentsSummary(bundle, modeData);
+  renderGuildContentsGrid(modeData);
+
+  const count = Number(modeData?.matchCount ?? modeData?.guilds?.length ?? 0);
+  refs.footerText.textContent = modeData
+    ? `${contentModeLabel(state.contentsMode)} · ${state.contentsGuild} 검색 결과 ${count}개 길드 표시 중 · ${state.guildContents?.capturedAt || "수집일 미상"}`
+    : `${state.contentsGuild} ${contentModeLabel(state.contentsMode)} 데이터가 아직 없습니다. MGF에서 열기로 확인하거나 npm run collect:contents를 실행하세요.`;
+}
+
+function renderGuildContentsSummary(bundle, modeData) {
+  if (!refs.contentsSummary) return;
+  const modes = ["league", "training", "boss"];
+  refs.contentsSummary.innerHTML = modes.map((mode) => {
+    const item = bundle?.modes?.[mode];
+    const isActive = mode === state.contentsMode;
+    const count = Number(item?.matchCount ?? item?.guilds?.length ?? 0);
+    const topGuild = item?.guilds?.[0];
+    return `
+      <button class="contents-summary-card ${isActive ? "active" : ""}" data-content-summary="${escapeAttr(mode)}" type="button">
+        <span>${contentModeEmoji(mode)} ${escapeHtml(contentModeLabel(mode))}</span>
+        <strong>${count ? `${count}개 길드` : "데이터 없음"}</strong>
+        <small>${topGuild ? `${escapeHtml(topGuild.name)} · ${escapeHtml(topGuild.powerText || "-")}` : "MGF에서 확인 가능"}</small>
+      </button>
+    `;
+  }).join("");
+
+  refs.contentsSummary.querySelectorAll("[data-content-summary]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.contentsMode = button.dataset.contentSummary || "league";
+      renderGuildContentsPage();
+    });
+  });
+}
+
+function renderGuildContentsGrid(modeData) {
+  if (!refs.contentsGrid) return;
+  const guilds = modeData?.guilds || [];
+  if (!guilds.length) {
+    refs.contentsGrid.innerHTML = `
+      <article class="contents-empty">
+        <strong>표시할 매칭 데이터가 없습니다.</strong>
+        <p>브라우저에서 MGF 원본 페이지를 열거나, 로컬에서 <code>npm run collect:contents</code>를 실행해 최신 데이터를 갱신하세요.</p>
+      </article>
+    `;
+    return;
+  }
+
+  refs.contentsGrid.innerHTML = guilds.map((guild, index) => renderGuildContentsCard(guild, index)).join("");
+}
+
+function renderGuildContentsCard(guild, index) {
+  const members = Array.isArray(guild.members) ? guild.members : [];
+  const rankBadge = index === 0 ? "현재 검색 길드" : `매칭 #${index + 1}`;
+  const memberLines = members.length
+    ? members.map((member) => renderGuildContentsMember(member)).join("")
+    : `<li><span>-</span><strong>최정예 멤버 정보 없음</strong><em>-</em></li>`;
+
+  return `
+    <article class="contents-card ${index === 0 ? "is-main" : ""}">
+      <div class="contents-card-top">
+        <span class="contents-rank">${escapeHtml(rankBadge)}</span>
+        <strong>${escapeHtml(guild.name || "-")}</strong>
+      </div>
+      <div class="contents-meta">
+        <span>Master. <b>${escapeHtml(guild.master || "-")}</b></span>
+        <span>${escapeHtml(guild.server || "-")}</span>
+      </div>
+      <div class="contents-power">
+        <span>총 전투력</span>
+        <strong>${escapeHtml(guild.powerText || "-")}</strong>
+      </div>
+      <div class="contents-members-title">최정예 멤버 TOP 5</div>
+      <ol class="contents-members">${memberLines}</ol>
+    </article>
+  `;
+}
+
+function renderGuildContentsMember(member) {
+  return `
+    <li>
+      <span>${escapeHtml(member.rank || "-")}</span>
+      <strong>${escapeHtml(member.nickname || "-")}</strong>
+      <em>${escapeHtml(member.powerText || "-")}</em>
+    </li>
+  `;
+}
+
+function getGuildContentBundles() {
+  return Array.isArray(state.guildContents?.guilds) ? state.guildContents.guilds : [];
+}
+
+function getSelectedGuildContentBundle() {
+  return getGuildContentBundles().find((item) => item.keyword === state.contentsGuild) || getGuildContentBundles()[0] || null;
+}
+
+function normalizeGuildContents(value) {
+  if (!value || !Array.isArray(value.guilds)) {
+    return { capturedAt: "", source: "MGF.GG", guilds: [] };
+  }
+  return value;
+}
+
+function contentModeLabel(mode) {
+  return ({ league: "대항전", training: "수련장", boss: "보스대전" })[mode] || "대항전";
+}
+
+function contentModeEmoji(mode) {
+  return ({ league: "⚔️", training: "🥋", boss: "👑" })[mode] || "⚔️";
+}
+
+function makeGuildContentsUrl(mode, keyword) {
+  return `https://mgf.gg/contents/guild.php?mode=${encodeURIComponent(mode || "league")}&stx=${encodeURIComponent(keyword || "반짝")}`;
+}
 
 function initGamePicker() {
   if (!refs.gameCharacterSelect) return;
@@ -720,6 +896,7 @@ function initVirtualLobbyClient() {
     collectionName: FIREBASE_LOBBY_COLLECTION,
     onParticipants: (participants) => {
       state.virtualParticipants = participants;
+      syncVirtualStateFromServer(participants);
       if (state.page === "virtual") renderVirtualPage();
     },
     onMessages: (messages) => {
@@ -748,7 +925,7 @@ function renderVirtualPage() {
 
   const member = getSelectedVirtualMember();
   refs.title.textContent = "길드 버츄얼 광장";
-  refs.subtitle.textContent = "캐릭터를 골라 광장에서 움직이고 채팅하기";
+  refs.subtitle.textContent = "캐릭터를 골라 광장에서 움직이고 채팅하고, 전투력 기반으로 장난 공격하기";
 
   renderVirtualStatus();
   renderVirtualSelected(member);
@@ -770,10 +947,26 @@ function renderVirtualStatus() {
 
 function renderVirtualSelected(member) {
   if (!member) return;
+  const me = getMyVirtualParticipant();
+  const maxHp = getVirtualMaxHp(member);
+  const hp = getVirtualHp(me, member);
+  const jailRemaining = getVirtualJailRemaining(me);
+  const cooldownRemaining = Math.max(0, state.virtualAttackCooldownUntil - Date.now());
+
   if (refs.virtualSelectedName) refs.virtualSelectedName.textContent = `${member.nickname || "-"} · ${member.job || "-"}`;
   if (refs.virtualPower) refs.virtualPower.textContent = formatKoreanPower(member.powerValue);
+  if (refs.virtualHp) refs.virtualHp.textContent = state.virtualJoined ? `${formatKoreanPower(hp)} / ${formatKoreanPower(maxHp)}` : formatKoreanPower(maxHp);
+  if (refs.virtualState) refs.virtualState.textContent = jailRemaining > 0
+    ? `감옥 ${Math.ceil(jailRemaining / 1000)}초`
+    : state.virtualJoined ? "정상" : "입장 전";
   if (refs.virtualTobeol) refs.virtualTobeol.textContent = formatKoreanPower(member.tobeolValue);
   if (refs.virtualJoin) refs.virtualJoin.textContent = state.virtualJoined ? "캐릭터 변경 적용" : "광장 입장";
+  if (refs.virtualAttack) {
+    refs.virtualAttack.disabled = !state.virtualJoined || jailRemaining > 0 || cooldownRemaining > 0;
+    refs.virtualAttack.textContent = cooldownRemaining > 0
+      ? `공격 대기 ${Math.ceil(cooldownRemaining / 1000)}초`
+      : "근처 공격";
+  }
   if (refs.virtualLeave) refs.virtualLeave.disabled = !state.virtualJoined;
   if (refs.virtualChatInput) refs.virtualChatInput.disabled = !state.virtualJoined;
   if (refs.virtualChatSend) refs.virtualChatSend.disabled = !state.virtualJoined;
@@ -784,28 +977,40 @@ function renderVirtualWorld() {
   const participants = getVirtualParticipantsForRender();
   const onlineCount = participants.filter((item) => !item.isGhost).length;
   if (refs.virtualOnlineCount) refs.virtualOnlineCount.textContent = `${onlineCount}명`; 
-  if (refs.virtualHint) refs.virtualHint.textContent = state.virtualJoined
-    ? "광장을 누르거나 방향 버튼/키보드 방향키로 이동할 수 있습니다."
-    : "캐릭터를 선택하고 입장하면 내 캐릭터가 광장에 나타납니다.";
+  const me = getMyVirtualParticipant();
+  const jailRemaining = getVirtualJailRemaining(me);
+  if (refs.virtualHint) refs.virtualHint.textContent = state.virtualActionMessage || (jailRemaining > 0
+    ? `공격을 당해 감옥에 갇혔습니다. ${Math.ceil(jailRemaining / 1000)}초 뒤 자동으로 풀려납니다.`
+    : state.virtualJoined
+      ? "광장을 누르거나 방향 버튼/키보드 방향키로 이동할 수 있습니다. 가까운 상대는 근처 공격으로 때릴 수 있어요."
+      : "캐릭터를 선택하고 입장하면 내 캐릭터가 광장에 나타납니다.");
 
   refs.virtualAvatars.innerHTML = participants.map((participant) => renderVirtualAvatar(participant)).join("");
 }
 
 function renderVirtualAvatar(participant) {
-  const member = participant.member || {};
+  const member = participant.member || findMemberByName(participant.guild, participant.nickname) || {};
   const isMe = participant.userId === state.virtualUserId;
   const x = clamp(Number(participant.x ?? 50), 5, 95);
   const y = clamp(Number(participant.y ?? 55), 10, 90);
   const imageUrl = getCharacterImageUrl(member.nickname || participant.nickname);
   const bubble = participant.lastMessage ? `<div class="avatar-bubble">${escapeHtml(participant.lastMessage)}</div>` : "";
+  const maxHp = getVirtualMaxHp(member, participant);
+  const hp = getVirtualHp(participant, member);
+  const hpPercent = maxHp ? clamp((hp / maxHp) * 100, 0, 100) : 100;
+  const jailRemaining = getVirtualJailRemaining(participant);
+  const jailBadge = jailRemaining > 0 ? `<span class="avatar-jail">감옥 ${Math.ceil(jailRemaining / 1000)}초</span>` : "";
+  const hpText = `${formatKoreanPower(hp)} / ${formatKoreanPower(maxHp)}`;
 
   return `
-    <button class="virtual-avatar ${isMe ? "is-me" : ""} ${participant.isGhost ? "is-ghost" : ""}" type="button" style="--x:${x}%; --y:${y}%" title="${escapeAttr(participant.nickname || "캐릭터")}">
+    <button class="virtual-avatar ${isMe ? "is-me" : ""} ${participant.isGhost ? "is-ghost" : ""} ${jailRemaining > 0 ? "is-jailed" : ""} ${hpPercent <= 35 ? "is-low-hp" : ""}" type="button" style="--x:${x}%; --y:${y}%; --hp:${hpPercent}%" title="${escapeAttr((participant.nickname || "캐릭터") + " · 체력 " + hpText)}">
       ${bubble}
+      ${jailBadge}
       <span class="avatar-shadow"></span>
       <img src="${escapeAttr(imageUrl)}" alt="${escapeAttr(participant.nickname || "캐릭터")}" loading="lazy" decoding="async" onerror="this.closest('.virtual-avatar').classList.add('is-missing'); this.remove();" />
       <span class="avatar-fallback">?</span>
       <strong>${escapeHtml(participant.nickname || "-")}</strong>
+      <span class="avatar-hp"><i></i></span>
       <small>${escapeHtml(participant.guild || "-")}</small>
     </button>
   `;
@@ -838,7 +1043,7 @@ async function joinVirtualLobby(keepPosition = false) {
   if (!keepPosition) state.virtualPosition = randomVirtualPosition();
   state.virtualJoined = true;
 
-  const participant = makeVirtualParticipant(member, state.virtualPosition);
+  const participant = makeVirtualParticipant(member, state.virtualPosition, { resetHp: true, clearJail: true });
 
   if (state.virtualClient?.enabled) {
     await state.virtualClient.upsertParticipant(participant);
@@ -846,11 +1051,13 @@ async function joinVirtualLobby(keepPosition = false) {
     upsertLocalParticipant(participant);
   }
 
+  startVirtualLoop();
   renderVirtualPage();
 }
 
 async function leaveVirtualLobby() {
   state.virtualJoined = false;
+  stopVirtualLoop();
   if (state.virtualClient?.enabled) {
     await state.virtualClient.leave(state.virtualUserId);
   } else {
@@ -864,11 +1071,19 @@ function moveVirtualRandom() {
     joinVirtualLobby(false);
     return;
   }
+  if (isMyVirtualJailed()) {
+    setVirtualActionMessage("감옥 안에서는 이동할 수 없습니다.");
+    return;
+  }
   updateVirtualPosition(randomVirtualPosition());
 }
 
 function handleVirtualStageClick(event) {
   if (!state.virtualJoined || !refs.virtualStage) return;
+  if (isMyVirtualJailed()) {
+    setVirtualActionMessage("감옥 안에서는 이동할 수 없습니다. 잠깐만 기다려주세요.");
+    return;
+  }
   if (event.target.closest(".virtual-controls, .virtual-chat-panel, .virtual-avatar")) return;
   const rect = refs.virtualStage.getBoundingClientRect();
   const x = ((event.clientX - rect.left) / rect.width) * 100;
@@ -879,6 +1094,11 @@ function handleVirtualStageClick(event) {
 function handleVirtualKeydown(event) {
   if (state.page !== "virtual" || !state.virtualJoined) return;
   if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
+  if (event.key === " " || event.key === "Enter") {
+    event.preventDefault();
+    attackNearestVirtualParticipant();
+    return;
+  }
   const map = {
     ArrowUp: "up",
     ArrowDown: "down",
@@ -892,6 +1112,10 @@ function handleVirtualKeydown(event) {
 
 function nudgeVirtualAvatar(direction) {
   if (!state.virtualJoined) return;
+  if (isMyVirtualJailed()) {
+    setVirtualActionMessage("감옥 안에서는 움직일 수 없습니다.");
+    return;
+  }
   const step = 5.5;
   const next = { ...state.virtualPosition };
   if (direction === "up") next.y -= step;
@@ -904,17 +1128,17 @@ function nudgeVirtualAvatar(direction) {
 async function updateVirtualPosition(position) {
   const member = getSelectedVirtualMember();
   if (!member) return;
+  if (isMyVirtualJailed()) {
+    state.virtualPosition = { ...VIRTUAL_JAIL_POSITION };
+    renderVirtualWorld();
+    return;
+  }
   state.virtualPosition = {
     x: clamp(Number(position.x), 5, 95),
     y: clamp(Number(position.y), 10, 90)
   };
 
-  const participant = makeVirtualParticipant(member, state.virtualPosition);
-  if (state.virtualClient?.enabled) {
-    await state.virtualClient.upsertParticipant(participant);
-  } else {
-    upsertLocalParticipant(participant);
-  }
+  await syncVirtualParticipant(true);
   renderVirtualWorld();
 }
 
@@ -949,6 +1173,240 @@ async function sendVirtualChat() {
   }
 }
 
+
+function startVirtualLoop() {
+  if (state.virtualLoopTimer) return;
+  state.virtualLoopTimer = window.setInterval(tickVirtualLobby, 1000);
+}
+
+function stopVirtualLoop() {
+  if (!state.virtualLoopTimer) return;
+  window.clearInterval(state.virtualLoopTimer);
+  state.virtualLoopTimer = null;
+}
+
+async function tickVirtualLobby() {
+  if (!state.virtualJoined) return;
+  const me = getMyVirtualParticipant();
+
+  if (shouldReleaseVirtualJail(me)) {
+    await releaseVirtualFromJail();
+    return;
+  }
+
+  if (getVirtualJailRemaining(me) > 0) {
+    state.virtualPosition = { ...VIRTUAL_JAIL_POSITION };
+    await syncVirtualParticipant(false);
+  } else if (Date.now() - state.virtualLastSyncAt > 3500) {
+    await syncVirtualParticipant(false);
+  }
+
+  if (state.page === "virtual") {
+    renderVirtualSelected(getSelectedVirtualMember());
+    renderVirtualWorld();
+  }
+}
+
+async function syncVirtualParticipant(force = false, options = {}) {
+  if (!state.virtualJoined) return;
+  const now = Date.now();
+  if (!force && now - state.virtualLastSyncAt < 2600) return;
+  state.virtualLastSyncAt = now;
+  const member = getSelectedVirtualMember();
+  const participant = makeVirtualParticipant(member, state.virtualPosition, options);
+  if (state.virtualClient?.enabled) {
+    await state.virtualClient.upsertParticipant(participant);
+  } else {
+    upsertLocalParticipant(participant);
+  }
+}
+
+function syncVirtualStateFromServer(participants) {
+  const me = participants.find((participant) => participant.userId === state.virtualUserId);
+  if (!me || !state.virtualJoined) return;
+  state.virtualPosition = {
+    x: clamp(Number(me.x ?? state.virtualPosition.x), 5, 95),
+    y: clamp(Number(me.y ?? state.virtualPosition.y), 10, 90)
+  };
+  if (me.attackedAt && me.attackedAt !== state.virtualLastAttackedAt) {
+    state.virtualLastAttackedAt = me.attackedAt;
+    if (getVirtualJailRemaining(me) > 0) {
+      setVirtualActionMessage(`${me.lastAttacker || "누군가"}에게 공격당해 5초 감옥에 갇혔습니다.`);
+    } else if (me.lastAttacker) {
+      setVirtualActionMessage(`${me.lastAttacker}에게 공격당했습니다. 체력이 줄었어요.`);
+    }
+  }
+}
+
+async function releaseVirtualFromJail() {
+  const member = getSelectedVirtualMember();
+  if (!member) return;
+  state.virtualPosition = randomVirtualPosition();
+  state.virtualActionMessage = "감옥에서 풀려났습니다. 체력이 다시 회복됐어요.";
+  const participant = makeVirtualParticipant(member, state.virtualPosition, { resetHp: true, clearJail: true });
+  participant.lastMessage = "감옥 탈출!";
+  if (state.virtualClient?.enabled) {
+    await state.virtualClient.upsertParticipant(participant);
+  } else {
+    upsertLocalParticipant(participant);
+  }
+  if (state.page === "virtual") renderVirtualPage();
+}
+
+async function attackNearestVirtualParticipant() {
+  if (!state.virtualJoined) {
+    await joinVirtualLobby(false);
+    return;
+  }
+
+  if (isMyVirtualJailed()) {
+    setVirtualActionMessage("감옥 안에서는 공격할 수 없습니다.");
+    return;
+  }
+
+  const cooldownRemaining = state.virtualAttackCooldownUntil - Date.now();
+  if (cooldownRemaining > 0) {
+    setVirtualActionMessage(`공격 대기 중입니다. ${Math.ceil(cooldownRemaining / 1000)}초만 기다려주세요.`);
+    return;
+  }
+
+  const target = findNearestVirtualAttackTarget();
+  if (!target) {
+    setVirtualActionMessage("공격할 수 있는 상대가 근처에 없습니다. 더 가까이 가보세요.");
+    return;
+  }
+
+  const meMember = getSelectedVirtualMember();
+  const targetMember = target.member || findMemberByName(target.guild, target.nickname) || {};
+  const damage = calculateVirtualAttackDamage(meMember, targetMember);
+  const targetMaxHp = getVirtualMaxHp(targetMember, target);
+  const targetHp = getVirtualHp(target, targetMember);
+  const nextHp = Math.max(0, targetHp - damage);
+  const now = new Date();
+  const myName = meMember?.nickname || "익명";
+  const targetName = target.nickname || "상대";
+  const patch = {
+    hp: Math.round(nextHp),
+    maxHp: Math.round(targetMaxHp),
+    attackedAt: now.toISOString(),
+    lastAttacker: myName,
+    lastMessage: `${myName} 공격!`
+  };
+
+  let text = `${myName} → ${targetName} 공격! -${formatKoreanPower(damage)} 체력`;
+  if (nextHp <= 0) {
+    patch.hp = 0;
+    patch.x = VIRTUAL_JAIL_POSITION.x;
+    patch.y = VIRTUAL_JAIL_POSITION.y;
+    patch.jailedUntil = new Date(Date.now() + VIRTUAL_JAIL_MS).toISOString();
+    patch.lastMessage = "감옥 5초!";
+    text = `${myName} → ${targetName} 제압! ${targetName} 감옥 5초`; 
+  }
+
+  if (state.virtualClient?.enabled && !target.isGhost) {
+    await state.virtualClient.patchParticipant(target.userId, patch);
+  } else {
+    upsertLocalParticipant({ ...target, ...patch });
+  }
+
+  state.virtualAttackCooldownUntil = Date.now() + VIRTUAL_ATTACK_COOLDOWN_MS;
+  state.virtualActionMessage = text;
+  await addVirtualSystemMessage(text);
+  await syncVirtualParticipant(true);
+  if (state.page === "virtual") renderVirtualPage();
+}
+
+function findNearestVirtualAttackTarget() {
+  const me = makeVirtualParticipant(getSelectedVirtualMember(), state.virtualPosition);
+  return getVirtualParticipantsForRender()
+    .filter((participant) => participant.userId !== state.virtualUserId)
+    .filter((participant) => isRecentParticipant(participant))
+    .filter((participant) => getVirtualJailRemaining(participant) <= 0)
+    .map((participant) => ({
+      ...participant,
+      distance: Math.hypot(Number(participant.x || 50) - Number(me.x || 50), Number(participant.y || 55) - Number(me.y || 55))
+    }))
+    .filter((participant) => participant.distance <= VIRTUAL_ATTACK_RANGE)
+    .sort((a, b) => a.distance - b.distance)[0] || null;
+}
+
+function calculateVirtualAttackDamage(attackerMember, targetMember) {
+  const attackerPower = getVirtualMaxHp(attackerMember);
+  const targetPower = getVirtualMaxHp(targetMember);
+  const powerRatio = targetPower > 0 ? attackerPower / targetPower : 1;
+  const ratioBonus = clamp(powerRatio, 0.45, 1.8);
+  return Math.max(1, Math.round(attackerPower * 0.18 * ratioBonus));
+}
+
+async function addVirtualSystemMessage(text) {
+  const message = {
+    id: `battle-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    userId: "plaza-battle",
+    nickname: "광장 전투",
+    guild: "SYSTEM",
+    text: String(text || "").slice(0, 120),
+    createdAt: new Date().toISOString()
+  };
+
+  if (state.virtualClient?.enabled) {
+    await state.virtualClient.sendMessage(message);
+    return;
+  }
+
+  state.virtualMessages = [...state.virtualMessages, message].slice(-80);
+  try {
+    localStorage.setItem(LOCAL_CHAT_KEY, JSON.stringify({ messages: state.virtualMessages }));
+  } catch {}
+}
+
+function getMyVirtualParticipant() {
+  return (state.virtualParticipants || []).find((participant) => participant.userId === state.virtualUserId) || null;
+}
+
+function getVirtualMaxHp(member, participant = null) {
+  const power = Number(member?.powerValue ?? participant?.maxHp ?? participant?.hp ?? 0);
+  return Math.max(1, Math.round(Number.isFinite(power) ? power : 1));
+}
+
+function getVirtualHp(participant, member = null) {
+  const maxHp = getVirtualMaxHp(member, participant);
+  if (!participant) return maxHp;
+  const hp = Number(participant.hp ?? maxHp);
+  return Math.round(clamp(Number.isFinite(hp) ? hp : maxHp, 0, maxHp));
+}
+
+function getVirtualJailRemaining(participant) {
+  const until = new Date(participant?.jailedUntil || "").getTime();
+  if (!Number.isFinite(until)) return 0;
+  return Math.max(0, until - Date.now());
+}
+
+function shouldReleaseVirtualJail(participant) {
+  if (!participant?.jailedUntil) return false;
+  const until = new Date(participant.jailedUntil).getTime();
+  if (!Number.isFinite(until) || until > Date.now()) return false;
+  return getVirtualHp(participant) <= 0;
+}
+
+function isMyVirtualJailed() {
+  return getVirtualJailRemaining(getMyVirtualParticipant()) > 0;
+}
+
+function setVirtualActionMessage(message) {
+  state.virtualActionMessage = message;
+  if (state.page === "virtual") {
+    renderVirtualSelected(getSelectedVirtualMember());
+    renderVirtualWorld();
+  }
+  window.clearTimeout(setVirtualActionMessage.timer);
+  setVirtualActionMessage.timer = window.setTimeout(() => {
+    if (state.virtualActionMessage === message) {
+      state.virtualActionMessage = "";
+      if (state.page === "virtual") renderVirtualWorld();
+    }
+  }, 2600);
+}
+
 function getVirtualParticipantsForRender() {
   const map = new Map();
   const membersByKey = new Map((state.data?.members || []).map((member) => [virtualMemberKey(member), member]));
@@ -969,7 +1427,7 @@ function getVirtualParticipantsForRender() {
   }
 
   const realParticipants = [...map.values()].filter((item) => isRecentParticipant(item));
-  if (realParticipants.length >= 2 || state.virtualJoined) return realParticipants;
+  if (state.virtualClient?.enabled && realParticipants.length >= 2) return realParticipants;
 
   return getDemoVirtualParticipants(realParticipants);
 }
@@ -998,22 +1456,37 @@ function getDemoVirtualParticipants(realParticipants) {
   ];
 }
 
-function makeVirtualParticipant(member, position) {
+function makeVirtualParticipant(member, position, options = {}) {
+  const existing = options.existing || getMyVirtualParticipant();
+  const maxHp = getVirtualMaxHp(member, existing);
+  const currentHp = options.resetHp
+    ? maxHp
+    : getVirtualHp(existing, member);
+  const jailedUntil = options.clearJail ? "" : String(existing?.jailedUntil || "");
+  const finalPosition = getVirtualJailRemaining({ jailedUntil }) > 0 ? VIRTUAL_JAIL_POSITION : position;
+
   return {
     userId: state.virtualUserId,
     memberKey: virtualMemberKey(member),
     nickname: member?.nickname || "익명",
     guild: member?.guild || "-",
     job: member?.job || "-",
-    x: clamp(Number(position?.x ?? 50), 5, 95),
-    y: clamp(Number(position?.y ?? 55), 10, 90),
+    x: clamp(Number(finalPosition?.x ?? 50), 5, 95),
+    y: clamp(Number(finalPosition?.y ?? 55), 10, 90),
+    hp: Math.round(clamp(currentHp, 0, maxHp)),
+    maxHp: Math.round(maxHp),
+    jailedUntil,
+    attackedAt: String(existing?.attackedAt || ""),
+    lastAttacker: String(existing?.lastAttacker || ""),
+    lastMessage: String(existing?.lastMessage || ""),
     lastSeen: new Date().toISOString()
   };
 }
 
 function upsertLocalParticipant(participant) {
   const byId = new Map((state.virtualParticipants || []).map((item) => [item.userId, item]));
-  byId.set(participant.userId, participant);
+  const previous = byId.get(participant.userId) || {};
+  byId.set(participant.userId, { ...previous, ...participant });
   state.virtualParticipants = [...byId.values()];
 }
 

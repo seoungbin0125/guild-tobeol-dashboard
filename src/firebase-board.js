@@ -153,6 +153,9 @@ export function createVirtualLobbyClient({
       async upsertParticipant() {
         throw new Error("Firebase 설정이 없습니다.");
       },
+      async patchParticipant() {
+        throw new Error("Firebase 설정이 없습니다.");
+      },
       async leave() {
         throw new Error("Firebase 설정이 없습니다.");
       },
@@ -207,7 +210,26 @@ export function createVirtualLobbyClient({
         job: String(participant.job || "-").slice(0, 40),
         x: Number(participant.x || 50),
         y: Number(participant.y || 55),
+        hp: Number(participant.hp || 1),
+        maxHp: Number(participant.maxHp || participant.hp || 1),
+        jailedUntil: String(participant.jailedUntil || "").slice(0, 40),
+        attackedAt: String(participant.attackedAt || "").slice(0, 40),
+        lastAttacker: String(participant.lastAttacker || "").slice(0, 30),
         lastMessage: String(participant.lastMessage || "").slice(0, 120),
+        lastSeen: new Date().toISOString(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    },
+    async patchParticipant(userId, patch) {
+      await setDoc(doc(participantsRef, safeDocId(userId)), {
+        ...(patch.x == null ? {} : { x: Number(patch.x) }),
+        ...(patch.y == null ? {} : { y: Number(patch.y) }),
+        ...(patch.hp == null ? {} : { hp: Number(patch.hp) }),
+        ...(patch.maxHp == null ? {} : { maxHp: Number(patch.maxHp) }),
+        jailedUntil: String(patch.jailedUntil || "").slice(0, 40),
+        attackedAt: String(patch.attackedAt || "").slice(0, 40),
+        lastAttacker: String(patch.lastAttacker || "").slice(0, 30),
+        lastMessage: String(patch.lastMessage || "").slice(0, 120),
         lastSeen: new Date().toISOString(),
         updatedAt: serverTimestamp()
       }, { merge: true });
@@ -241,6 +263,11 @@ function normalizeVirtualParticipant(id, data) {
     job: String(data.job || "-"),
     x: Number(data.x || 50),
     y: Number(data.y || 55),
+    hp: Number(data.hp || data.maxHp || 1),
+    maxHp: Number(data.maxHp || data.hp || 1),
+    jailedUntil: String(data.jailedUntil || ""),
+    attackedAt: String(data.attackedAt || ""),
+    lastAttacker: String(data.lastAttacker || ""),
     lastMessage: String(data.lastMessage || ""),
     lastSeen: String(data.lastSeen || ""),
     updatedAt: toIsoString(data.updatedAt) || data.updatedAt || ""

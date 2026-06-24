@@ -48,7 +48,9 @@ service cloud.firestore {
 
       // 버츄얼 광장 위치 동기화용입니다. 공개 길드 포털에서 바로 쓰기 위한 간단 규칙입니다.
       allow create, update: if request.resource.data.keys().hasOnly([
-          'userId', 'memberKey', 'nickname', 'guild', 'job', 'x', 'y', 'lastMessage', 'lastSeen', 'updatedAt'
+          'userId', 'memberKey', 'nickname', 'guild', 'job', 'x', 'y',
+          'hp', 'maxHp', 'jailedUntil', 'attackedAt', 'lastAttacker',
+          'lastMessage', 'lastSeen', 'updatedAt'
         ])
         && request.resource.data.userId is string
         && request.resource.data.userId.size() <= 80
@@ -66,6 +68,18 @@ service cloud.firestore {
         && request.resource.data.y is number
         && request.resource.data.y >= 0
         && request.resource.data.y <= 100
+        && request.resource.data.hp is number
+        && request.resource.data.hp >= 0
+        && request.resource.data.hp <= 1000000000000000000
+        && request.resource.data.maxHp is number
+        && request.resource.data.maxHp >= 1
+        && request.resource.data.maxHp <= 1000000000000000000
+        && request.resource.data.jailedUntil is string
+        && request.resource.data.jailedUntil.size() <= 40
+        && request.resource.data.attackedAt is string
+        && request.resource.data.attackedAt.size() <= 40
+        && request.resource.data.lastAttacker is string
+        && request.resource.data.lastAttacker.size() <= 30
         && request.resource.data.lastMessage is string
         && request.resource.data.lastMessage.size() <= 120
         && request.resource.data.lastSeen is string
