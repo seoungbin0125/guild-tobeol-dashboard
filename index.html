@@ -133,7 +133,7 @@
         <article class="virtual-card virtual-intro">
           <p class="eyebrow mini">Virtual Plaza</p>
           <h2>길드 버츄얼 광장</h2>
-          <p class="muted">내 캐릭터를 골라 광장에 입장하고, 다른 길드원 캐릭터와 만나서 짧게 채팅할 수 있습니다.</p>
+          <p class="muted">메이플 느낌의 긴 2D 광장에서 캐릭터를 움직이고, 채팅과 스킬 장난을 할 수 있습니다.</p>
           <div class="virtual-status" id="virtual-status">광장 연결 확인 중...</div>
 
           <label class="virtual-picker">
@@ -153,8 +153,7 @@
 
           <div class="virtual-actions">
             <button class="primary-btn" id="virtual-join" type="button">광장 입장</button>
-            <button class="secondary-btn" id="virtual-attack" type="button" disabled>근처 공격</button>
-            <button class="secondary-btn" id="virtual-random" type="button">랜덤 이동</button>
+            <button class="secondary-btn" id="virtual-random" type="button">맵 랜덤 이동</button>
             <button class="danger-btn" id="virtual-leave" type="button" disabled>나가기</button>
           </div>
         </article>
@@ -163,7 +162,7 @@
           <div class="virtual-stage-top">
             <div>
               <p class="eyebrow mini">Guild Plaza</p>
-              <h2>만남의 광장</h2>
+              <h2>헤네시스 광장풍 놀이터</h2>
             </div>
             <span class="online-pill">접속 <strong id="virtual-online-count">0명</strong></span>
           </div>
@@ -171,6 +170,10 @@
           <div class="virtual-stage" id="virtual-stage" aria-label="캐릭터 광장">
             <div class="stage-decoration deco-1"></div>
             <div class="stage-decoration deco-2"></div>
+            <div class="stage-skyline" aria-hidden="true"></div>
+            <div class="stage-platform platform-1" aria-hidden="true"></div>
+            <div class="stage-platform platform-2" aria-hidden="true"></div>
+            <div class="stage-platform platform-3" aria-hidden="true"></div>
             <div class="stage-road"></div>
             <div class="stage-jail" aria-hidden="true">
               <span>감옥</span>
@@ -181,12 +184,17 @@
           </div>
 
           <div class="virtual-controls" aria-label="캐릭터 이동 버튼">
-            <span></span>
-            <button type="button" data-virtual-move="up">▲</button>
-            <span></span>
             <button type="button" data-virtual-move="left">◀</button>
-            <button type="button" data-virtual-move="down">▼</button>
+            <button type="button" data-virtual-move="up">점프</button>
             <button type="button" data-virtual-move="right">▶</button>
+            <button type="button" data-virtual-move="down">착지</button>
+          </div>
+
+          <div class="virtual-skill-pad" aria-label="광장 스킬 버튼">
+            <button class="skill-btn skill-attack" id="virtual-attack" type="button" data-virtual-skill="slash" data-skill-label="공격" disabled><span>⚔️</span><b>공격</b></button>
+            <button class="skill-btn" type="button" data-virtual-skill="dash" data-skill-label="돌진" disabled><span>💨</span><b>돌진</b></button>
+            <button class="skill-btn" type="button" data-virtual-skill="heal" data-skill-label="회복" disabled><span>💚</span><b>회복</b></button>
+            <button class="skill-btn" type="button" data-virtual-skill="shield" data-skill-label="실드" disabled><span>🛡️</span><b>실드</b></button>
           </div>
         </section>
 

@@ -10,8 +10,18 @@ const LOCAL_GAME_KEY = "guild-tobeol-dashboard.jelly-user.v1";
 const LOCAL_GAME_EVENTS_KEY = "guild-tobeol-dashboard.jelly-events.v1";
 const VIRTUAL_JAIL_MS = 5000;
 const VIRTUAL_ATTACK_COOLDOWN_MS = 1200;
-const VIRTUAL_ATTACK_RANGE = 13.5;
-const VIRTUAL_JAIL_POSITION = { x: 50, y: 88 };
+const VIRTUAL_ATTACK_RANGE = 16;
+const VIRTUAL_WORLD_MIN_X = 3;
+const VIRTUAL_WORLD_MAX_X = 97;
+const VIRTUAL_WORLD_MIN_Y = 42;
+const VIRTUAL_WORLD_MAX_Y = 86;
+const VIRTUAL_JAIL_POSITION = { x: 91, y: 75 };
+const VIRTUAL_SKILLS = {
+  slash: { label: "공격", cooldown: 1200, range: 16, damageRate: 0.16, message: "기본 공격!" },
+  dash: { label: "돌진", cooldown: 4200, range: 28, damageRate: 0.24, dash: true, message: "돌진 베기!" },
+  heal: { label: "회복", cooldown: 9000, healRate: 0.24, message: "회복 스킬 사용!" },
+  shield: { label: "실드", cooldown: 11000, shieldMs: 5500, message: "방어막 생성!" }
+};
 
 const state = {
   rawData: null,
@@ -46,6 +56,7 @@ const state = {
   virtualLoopTimer: null,
   virtualLastSyncAt: 0,
   virtualAttackCooldownUntil: 0,
+  virtualSkillCooldowns: {},
   virtualActionMessage: "",
   virtualLastAttackedAt: "",
   virtualUserId: getOrCreateVirtualUserId(),
@@ -110,6 +121,7 @@ const refs = {
   virtualState: document.getElementById("virtual-state"),
   virtualTobeol: document.getElementById("virtual-tobeol"),
   virtualAttack: document.getElementById("virtual-attack"),
+  virtualSkillButtons: document.querySelectorAll("[data-virtual-skill]"),
   virtualChatList: document.getElementById("virtual-chat-list"),
   virtualChatInput: document.getElementById("virtual-chat-input"),
   virtualChatSend: document.getElementById("virtual-chat-send"),
@@ -289,7 +301,9 @@ function bindEvents() {
   });
 
   refs.virtualJoin?.addEventListener("click", () => joinVirtualLobby(false));
-  refs.virtualAttack?.addEventListener("click", attackNearestVirtualParticipant);
+  refs.virtualSkillButtons?.forEach((button) => {
+    button.addEventListener("click", () => useVirtualSkill(button.dataset.virtualSkill || "slash"));
+  });
   refs.virtualLeave?.addEventListener("click", leaveVirtualLobby);
   refs.virtualRandom?.addEventListener("click", moveVirtualRandom);
   refs.virtualStage?.addEventListener("click", handleVirtualStageClick);
@@ -1058,8 +1072,8 @@ function renderVirtualPage() {
   if (!state.virtualSelectedKey) initVirtualPicker();
 
   const member = getSelectedVirtualMember();
-  refs.title.textContent = "길드 버츄얼 광장";
-  refs.subtitle.textContent = "캐릭터를 골라 광장에서 움직이고 채팅하고, 전투력 기반으로 장난 공격하기";
+  refs.title.textContent = "길드 2D 광장";
+  refs.subtitle.textContent = "가로로 긴 맵에서 이동 · 채팅 · 전투력 기반 스킬 장난하기";
 
   renderVirtualStatus();
   renderVirtualSelected(member);
@@ -1090,56 +1104,74 @@ function renderVirtualSelected(member) {
   if (refs.virtualSelectedName) refs.virtualSelectedName.textContent = `${member.nickname || "-"} · ${member.job || "-"}`;
   if (refs.virtualPower) refs.virtualPower.textContent = formatKoreanPower(member.powerValue);
   if (refs.virtualHp) refs.virtualHp.textContent = state.virtualJoined ? `${formatKoreanPower(hp)} / ${formatKoreanPower(maxHp)}` : formatKoreanPower(maxHp);
+  const shieldRemaining = getVirtualShieldRemaining(me);
   if (refs.virtualState) refs.virtualState.textContent = jailRemaining > 0
     ? `감옥 ${Math.ceil(jailRemaining / 1000)}초`
-    : state.virtualJoined ? "정상" : "입장 전";
+    : shieldRemaining > 0
+      ? `실드 ${Math.ceil(shieldRemaining / 1000)}초`
+      : state.virtualJoined ? "정상" : "입장 전";
   if (refs.virtualTobeol) refs.virtualTobeol.textContent = formatKoreanPower(member.tobeolValue);
   if (refs.virtualJoin) refs.virtualJoin.textContent = state.virtualJoined ? "캐릭터 변경 적용" : "광장 입장";
-  if (refs.virtualAttack) {
-    refs.virtualAttack.disabled = !state.virtualJoined || jailRemaining > 0 || cooldownRemaining > 0;
-    refs.virtualAttack.textContent = cooldownRemaining > 0
-      ? `공격 대기 ${Math.ceil(cooldownRemaining / 1000)}초`
-      : "근처 공격";
-  }
+  updateVirtualSkillButtons(jailRemaining);
   if (refs.virtualLeave) refs.virtualLeave.disabled = !state.virtualJoined;
   if (refs.virtualChatInput) refs.virtualChatInput.disabled = !state.virtualJoined;
   if (refs.virtualChatSend) refs.virtualChatSend.disabled = !state.virtualJoined;
+}
+
+function updateVirtualSkillButtons(jailRemaining = 0) {
+  const now = Date.now();
+  refs.virtualSkillButtons?.forEach((button) => {
+    const skillName = button.dataset.virtualSkill || "slash";
+    const skill = VIRTUAL_SKILLS[skillName] || VIRTUAL_SKILLS.slash;
+    const cooldownRemaining = Math.max(0, Number(state.virtualSkillCooldowns?.[skillName] || 0) - now);
+    const disabled = !state.virtualJoined || jailRemaining > 0 || cooldownRemaining > 0;
+    button.disabled = disabled;
+    const label = cooldownRemaining > 0 ? `${Math.ceil(cooldownRemaining / 1000)}초` : skill.label;
+    const labelNode = button.querySelector("b");
+    if (labelNode) labelNode.textContent = label;
+    button.classList.toggle("is-cooling", cooldownRemaining > 0);
+  });
 }
 
 function renderVirtualWorld() {
   if (!refs.virtualAvatars) return;
   const participants = getVirtualParticipantsForRender();
   const onlineCount = participants.filter((item) => !item.isGhost).length;
-  if (refs.virtualOnlineCount) refs.virtualOnlineCount.textContent = `${onlineCount}명`; 
+  if (refs.virtualOnlineCount) refs.virtualOnlineCount.textContent = `${onlineCount}명`;
   const me = getMyVirtualParticipant();
   const jailRemaining = getVirtualJailRemaining(me);
   if (refs.virtualHint) refs.virtualHint.textContent = state.virtualActionMessage || (jailRemaining > 0
-    ? `공격을 당해 감옥에 갇혔습니다. ${Math.ceil(jailRemaining / 1000)}초 뒤 자동으로 풀려납니다.`
+    ? `감옥에 갇혔습니다. ${Math.ceil(jailRemaining / 1000)}초 뒤 자동으로 풀려납니다.`
     : state.virtualJoined
-      ? "광장을 누르거나 방향 버튼/키보드 방향키로 이동할 수 있습니다. 가까운 상대는 근처 공격으로 때릴 수 있어요."
-      : "캐릭터를 선택하고 입장하면 내 캐릭터가 광장에 나타납니다.");
+      ? "좌우로 긴 맵입니다. 화면을 옆으로 밀어 돌아다니고, 하단 스킬 버튼으로 장난 공격을 써보세요."
+      : "광장 입장 버튼을 누르면 캐릭터들이 보이고 이동/채팅/스킬을 사용할 수 있습니다.");
 
-  refs.virtualAvatars.innerHTML = participants.map((participant) => renderVirtualAvatar(participant)).join("");
+  refs.virtualAvatars.innerHTML = state.virtualJoined
+    ? participants.map((participant) => renderVirtualAvatar(participant)).join("")
+    : `<div class="virtual-entry-cover"><strong>입장 대기 중</strong><span>캐릭터를 고르고 광장 입장을 누르면 긴 2D 맵이 열립니다.</span></div>`;
 }
 
 function renderVirtualAvatar(participant) {
   const member = participant.member || findMemberByName(participant.guild, participant.nickname) || {};
   const isMe = participant.userId === state.virtualUserId;
-  const x = clamp(Number(participant.x ?? 50), 5, 95);
-  const y = clamp(Number(participant.y ?? 55), 10, 90);
+  const x = clamp(Number(participant.x ?? 50), VIRTUAL_WORLD_MIN_X, VIRTUAL_WORLD_MAX_X);
+  const y = clamp(Number(participant.y ?? 64), VIRTUAL_WORLD_MIN_Y, VIRTUAL_WORLD_MAX_Y);
   const imageUrl = getCharacterImageUrl(member.nickname || participant.nickname);
   const bubble = participant.lastMessage ? `<div class="avatar-bubble">${escapeHtml(participant.lastMessage)}</div>` : "";
   const maxHp = getVirtualMaxHp(member, participant);
   const hp = getVirtualHp(participant, member);
   const hpPercent = maxHp ? clamp((hp / maxHp) * 100, 0, 100) : 100;
   const jailRemaining = getVirtualJailRemaining(participant);
+  const shieldRemaining = getVirtualShieldRemaining(participant);
   const jailBadge = jailRemaining > 0 ? `<span class="avatar-jail">감옥 ${Math.ceil(jailRemaining / 1000)}초</span>` : "";
+  const shieldBadge = shieldRemaining > 0 ? `<span class="avatar-shield">실드</span>` : "";
   const hpText = `${formatKoreanPower(hp)} / ${formatKoreanPower(maxHp)}`;
 
   return `
-    <button class="virtual-avatar ${isMe ? "is-me" : ""} ${participant.isGhost ? "is-ghost" : ""} ${jailRemaining > 0 ? "is-jailed" : ""} ${hpPercent <= 35 ? "is-low-hp" : ""}" type="button" style="--x:${x}%; --y:${y}%; --hp:${hpPercent}%" title="${escapeAttr((participant.nickname || "캐릭터") + " · 체력 " + hpText)}">
+    <button class="virtual-avatar ${isMe ? "is-me" : ""} ${participant.isGhost ? "is-ghost" : ""} ${jailRemaining > 0 ? "is-jailed" : ""} ${shieldRemaining > 0 ? "is-shielded" : ""} ${hpPercent <= 35 ? "is-low-hp" : ""}" type="button" style="--x:${x}%; --y:${y}%; --hp:${hpPercent}%" title="${escapeAttr((participant.nickname || "캐릭터") + " · 체력 " + hpText)}">
       ${bubble}
       ${jailBadge}
+      ${shieldBadge}
       <span class="avatar-shadow"></span>
       <img src="${escapeAttr(imageUrl)}" alt="${escapeAttr(participant.nickname || "캐릭터")}" loading="lazy" decoding="async" onerror="this.closest('.virtual-avatar').classList.add('is-missing'); this.remove();" />
       <span class="avatar-fallback">?</span>
@@ -1187,6 +1219,7 @@ async function joinVirtualLobby(keepPosition = false) {
 
   startVirtualLoop();
   renderVirtualPage();
+  centerVirtualStageOnMe();
 }
 
 async function leaveVirtualLobby() {
@@ -1230,7 +1263,17 @@ function handleVirtualKeydown(event) {
   if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
   if (event.key === " " || event.key === "Enter") {
     event.preventDefault();
-    attackNearestVirtualParticipant();
+    useVirtualSkill("slash");
+    return;
+  }
+  if (event.key.toLowerCase() === "q") {
+    event.preventDefault();
+    useVirtualSkill("dash");
+    return;
+  }
+  if (event.key.toLowerCase() === "e") {
+    event.preventDefault();
+    useVirtualSkill("heal");
     return;
   }
   const map = {
@@ -1250,7 +1293,7 @@ function nudgeVirtualAvatar(direction) {
     setVirtualActionMessage("감옥 안에서는 움직일 수 없습니다.");
     return;
   }
-  const step = 5.5;
+  const step = direction === "left" || direction === "right" ? 5.2 : 4.4;
   const next = { ...state.virtualPosition };
   if (direction === "up") next.y -= step;
   if (direction === "down") next.y += step;
@@ -1268,12 +1311,13 @@ async function updateVirtualPosition(position) {
     return;
   }
   state.virtualPosition = {
-    x: clamp(Number(position.x), 5, 95),
-    y: clamp(Number(position.y), 10, 90)
+    x: clamp(Number(position.x), VIRTUAL_WORLD_MIN_X, VIRTUAL_WORLD_MAX_X),
+    y: clamp(Number(position.y), VIRTUAL_WORLD_MIN_Y, VIRTUAL_WORLD_MAX_Y)
   };
 
   await syncVirtualParticipant(true);
   renderVirtualWorld();
+  centerVirtualStageOnMe();
 }
 
 async function sendVirtualChat() {
@@ -1359,8 +1403,8 @@ function syncVirtualStateFromServer(participants) {
   const me = participants.find((participant) => participant.userId === state.virtualUserId);
   if (!me || !state.virtualJoined) return;
   state.virtualPosition = {
-    x: clamp(Number(me.x ?? state.virtualPosition.x), 5, 95),
-    y: clamp(Number(me.y ?? state.virtualPosition.y), 10, 90)
+    x: clamp(Number(me.x ?? state.virtualPosition.x), VIRTUAL_WORLD_MIN_X, VIRTUAL_WORLD_MAX_X),
+    y: clamp(Number(me.y ?? state.virtualPosition.y), VIRTUAL_WORLD_MIN_Y, VIRTUAL_WORLD_MAX_Y)
   };
   if (me.attackedAt && me.attackedAt !== state.virtualLastAttackedAt) {
     state.virtualLastAttackedAt = me.attackedAt;
@@ -1378,7 +1422,6 @@ async function releaseVirtualFromJail() {
   state.virtualPosition = randomVirtualPosition();
   state.virtualActionMessage = "감옥에서 풀려났습니다. 체력이 다시 회복됐어요.";
   const participant = makeVirtualParticipant(member, state.virtualPosition, { resetHp: true, clearJail: true });
-  participant.lastMessage = "감옥 탈출!";
   if (state.virtualClient?.enabled) {
     await state.virtualClient.upsertParticipant(participant);
   } else {
@@ -1388,31 +1431,78 @@ async function releaseVirtualFromJail() {
 }
 
 async function attackNearestVirtualParticipant() {
+  return useVirtualSkill("slash");
+}
+
+async function useVirtualSkill(skillName = "slash") {
+  const skill = VIRTUAL_SKILLS[skillName] || VIRTUAL_SKILLS.slash;
   if (!state.virtualJoined) {
     await joinVirtualLobby(false);
     return;
   }
 
   if (isMyVirtualJailed()) {
-    setVirtualActionMessage("감옥 안에서는 공격할 수 없습니다.");
+    setVirtualActionMessage("감옥 안에서는 스킬을 사용할 수 없습니다.");
     return;
   }
 
-  const cooldownRemaining = state.virtualAttackCooldownUntil - Date.now();
+  const cooldownRemaining = Number(state.virtualSkillCooldowns?.[skillName] || 0) - Date.now();
   if (cooldownRemaining > 0) {
-    setVirtualActionMessage(`공격 대기 중입니다. ${Math.ceil(cooldownRemaining / 1000)}초만 기다려주세요.`);
+    setVirtualActionMessage(`${skill.label} 대기 중입니다. ${Math.ceil(cooldownRemaining / 1000)}초 남았어요.`);
     return;
   }
 
-  const target = findNearestVirtualAttackTarget();
+  if (skillName === "heal") {
+    await useVirtualHeal(skill);
+    return;
+  }
+
+  if (skillName === "shield") {
+    await useVirtualShield(skill);
+    return;
+  }
+
+  const target = findNearestVirtualAttackTarget(skill.range || VIRTUAL_ATTACK_RANGE);
   if (!target) {
-    setVirtualActionMessage("공격할 수 있는 상대가 근처에 없습니다. 더 가까이 가보세요.");
+    setVirtualActionMessage(`${skill.label}: 사거리 안에 상대가 없습니다. 조금 더 가까이 가보세요.`);
+    setVirtualCooldown(skillName, 450);
+    updateVirtualSkillButtons(getVirtualJailRemaining(getMyVirtualParticipant()));
     return;
   }
 
+  if (skill.dash) {
+    dashTowardVirtualTarget(target);
+  }
+
+  await applyVirtualAttackToTarget(target, skillName, skill);
+}
+
+async function useVirtualHeal(skill) {
+  const member = getSelectedVirtualMember();
+  const me = getMyVirtualParticipant() || makeVirtualParticipant(member, state.virtualPosition);
+  const maxHp = getVirtualMaxHp(member, me);
+  const hp = getVirtualHp(me, member);
+  const nextHp = Math.min(maxHp, hp + Math.round(maxHp * (skill.healRate || 0.2)));
+  setVirtualCooldown("heal", skill.cooldown);
+  setVirtualActionMessage(`회복! 체력이 ${formatKoreanPower(nextHp)}까지 회복됐어요.`);
+  await syncVirtualParticipant(true, { hp: nextHp, clearJail: true, preserveStatus: true });
+  if (state.page === "virtual") renderVirtualPage();
+}
+
+async function useVirtualShield(skill) {
+  const until = new Date(Date.now() + (skill.shieldMs || 5000)).toISOString();
+  setVirtualCooldown("shield", skill.cooldown);
+  setVirtualActionMessage("방어막! 잠깐 동안 받는 피해가 줄어듭니다.");
+  await syncVirtualParticipant(true, { shieldUntil: until, preserveStatus: true });
+  if (state.page === "virtual") renderVirtualPage();
+}
+
+async function applyVirtualAttackToTarget(target, skillName, skill) {
   const meMember = getSelectedVirtualMember();
   const targetMember = target.member || findMemberByName(target.guild, target.nickname) || {};
-  const damage = calculateVirtualAttackDamage(meMember, targetMember);
+  const rawDamage = calculateVirtualAttackDamage(meMember, targetMember, skill.damageRate || 0.16);
+  const shielded = getVirtualShieldRemaining(target) > 0;
+  const damage = shielded ? Math.max(1, Math.round(rawDamage * 0.45)) : rawDamage;
   const targetMaxHp = getVirtualMaxHp(targetMember, target);
   const targetHp = getVirtualHp(target, targetMember);
   const nextHp = Math.max(0, targetHp - damage);
@@ -1424,17 +1514,17 @@ async function attackNearestVirtualParticipant() {
     maxHp: Math.round(targetMaxHp),
     attackedAt: now.toISOString(),
     lastAttacker: myName,
-    lastMessage: `${myName} 공격!`
+    shieldUntil: String(target.shieldUntil || "")
   };
 
-  let text = `${myName} → ${targetName} 공격! -${formatKoreanPower(damage)} 체력`;
+  let text = `${skill.message || skill.label} ${targetName}에게 -${formatKoreanPower(damage)}`;
+  if (shielded) text += " · 방어막 감소";
   if (nextHp <= 0) {
     patch.hp = 0;
     patch.x = VIRTUAL_JAIL_POSITION.x;
     patch.y = VIRTUAL_JAIL_POSITION.y;
     patch.jailedUntil = new Date(Date.now() + VIRTUAL_JAIL_MS).toISOString();
-    patch.lastMessage = "감옥 5초!";
-    text = `${myName} → ${targetName} 제압! ${targetName} 감옥 5초`; 
+    text = `${targetName} 제압! 5초 감옥으로 이동했습니다.`;
   }
 
   if (state.virtualClient?.enabled && !target.isGhost) {
@@ -1443,14 +1533,32 @@ async function attackNearestVirtualParticipant() {
     upsertLocalParticipant({ ...target, ...patch });
   }
 
-  state.virtualAttackCooldownUntil = Date.now() + VIRTUAL_ATTACK_COOLDOWN_MS;
+  setVirtualCooldown(skillName, skill.cooldown || VIRTUAL_ATTACK_COOLDOWN_MS);
+  state.virtualAttackCooldownUntil = state.virtualSkillCooldowns[skillName];
   state.virtualActionMessage = text;
-  await addVirtualSystemMessage(text);
   await syncVirtualParticipant(true);
   if (state.page === "virtual") renderVirtualPage();
 }
 
-function findNearestVirtualAttackTarget() {
+function setVirtualCooldown(skillName, ms) {
+  state.virtualSkillCooldowns = {
+    ...(state.virtualSkillCooldowns || {}),
+    [skillName]: Date.now() + Number(ms || 0)
+  };
+}
+
+function dashTowardVirtualTarget(target) {
+  const current = { ...state.virtualPosition };
+  const dx = Number(target.x || 50) - Number(current.x || 50);
+  const dy = Number(target.y || 64) - Number(current.y || 64);
+  const length = Math.max(1, Math.hypot(dx, dy));
+  state.virtualPosition = {
+    x: clamp(current.x + (dx / length) * Math.min(9, length * 0.72), VIRTUAL_WORLD_MIN_X, VIRTUAL_WORLD_MAX_X),
+    y: clamp(current.y + (dy / length) * Math.min(4, length * 0.45), VIRTUAL_WORLD_MIN_Y, VIRTUAL_WORLD_MAX_Y)
+  };
+}
+
+function findNearestVirtualAttackTarget(range = VIRTUAL_ATTACK_RANGE) {
   const me = makeVirtualParticipant(getSelectedVirtualMember(), state.virtualPosition);
   return getVirtualParticipantsForRender()
     .filter((participant) => participant.userId !== state.virtualUserId)
@@ -1460,16 +1568,16 @@ function findNearestVirtualAttackTarget() {
       ...participant,
       distance: Math.hypot(Number(participant.x || 50) - Number(me.x || 50), Number(participant.y || 55) - Number(me.y || 55))
     }))
-    .filter((participant) => participant.distance <= VIRTUAL_ATTACK_RANGE)
+    .filter((participant) => participant.distance <= range)
     .sort((a, b) => a.distance - b.distance)[0] || null;
 }
 
-function calculateVirtualAttackDamage(attackerMember, targetMember) {
+function calculateVirtualAttackDamage(attackerMember, targetMember, damageRate = 0.18) {
   const attackerPower = getVirtualMaxHp(attackerMember);
   const targetPower = getVirtualMaxHp(targetMember);
   const powerRatio = targetPower > 0 ? attackerPower / targetPower : 1;
   const ratioBonus = clamp(powerRatio, 0.45, 1.8);
-  return Math.max(1, Math.round(attackerPower * 0.18 * ratioBonus));
+  return Math.max(1, Math.round(attackerPower * damageRate * ratioBonus));
 }
 
 async function addVirtualSystemMessage(text) {
@@ -1515,6 +1623,12 @@ function getVirtualJailRemaining(participant) {
   return Math.max(0, until - Date.now());
 }
 
+function getVirtualShieldRemaining(participant) {
+  const until = new Date(participant?.shieldUntil || "").getTime();
+  if (!Number.isFinite(until)) return 0;
+  return Math.max(0, until - Date.now());
+}
+
 function shouldReleaseVirtualJail(participant) {
   if (!participant?.jailedUntil) return false;
   const until = new Date(participant.jailedUntil).getTime();
@@ -1542,6 +1656,7 @@ function setVirtualActionMessage(message) {
 }
 
 function getVirtualParticipantsForRender() {
+  if (!state.virtualJoined) return [];
   const map = new Map();
   const membersByKey = new Map((state.data?.members || []).map((member) => [virtualMemberKey(member), member]));
 
@@ -1581,8 +1696,8 @@ function getDemoVirtualParticipants(realParticipants) {
       nickname: member.nickname,
       guild: member.guild,
       job: member.job,
-      x: [18, 34, 50, 67, 82, 24, 74][index] || 50,
-      y: [28, 64, 42, 70, 34, 78, 52][index] || 50,
+      x: [12, 24, 38, 52, 66, 78, 90][index] || 50,
+      y: [66, 72, 60, 78, 64, 74, 68][index] || 66,
       lastSeen: new Date().toISOString(),
       member,
       isGhost: true
@@ -1593,10 +1708,13 @@ function getDemoVirtualParticipants(realParticipants) {
 function makeVirtualParticipant(member, position, options = {}) {
   const existing = options.existing || getMyVirtualParticipant();
   const maxHp = getVirtualMaxHp(member, existing);
-  const currentHp = options.resetHp
-    ? maxHp
-    : getVirtualHp(existing, member);
+  const currentHp = Number.isFinite(Number(options.hp))
+    ? Number(options.hp)
+    : options.resetHp
+      ? maxHp
+      : getVirtualHp(existing, member);
   const jailedUntil = options.clearJail ? "" : String(existing?.jailedUntil || "");
+  const shieldUntil = options.shieldUntil != null ? String(options.shieldUntil || "") : String(existing?.shieldUntil || "");
   const finalPosition = getVirtualJailRemaining({ jailedUntil }) > 0 ? VIRTUAL_JAIL_POSITION : position;
 
   return {
@@ -1605,11 +1723,12 @@ function makeVirtualParticipant(member, position, options = {}) {
     nickname: member?.nickname || "익명",
     guild: member?.guild || "-",
     job: member?.job || "-",
-    x: clamp(Number(finalPosition?.x ?? 50), 5, 95),
-    y: clamp(Number(finalPosition?.y ?? 55), 10, 90),
+    x: clamp(Number(finalPosition?.x ?? 50), VIRTUAL_WORLD_MIN_X, VIRTUAL_WORLD_MAX_X),
+    y: clamp(Number(finalPosition?.y ?? 64), VIRTUAL_WORLD_MIN_Y, VIRTUAL_WORLD_MAX_Y),
     hp: Math.round(clamp(currentHp, 0, maxHp)),
     maxHp: Math.round(maxHp),
     jailedUntil,
+    shieldUntil,
     attackedAt: String(existing?.attackedAt || ""),
     lastAttacker: String(existing?.lastAttacker || ""),
     lastMessage: String(existing?.lastMessage || ""),
@@ -1639,9 +1758,18 @@ function findMemberByName(guild, nickname) {
 
 function randomVirtualPosition() {
   return {
-    x: 14 + Math.random() * 72,
-    y: 18 + Math.random() * 64
+    x: 8 + Math.random() * 84,
+    y: 58 + Math.random() * 22
   };
+}
+
+function centerVirtualStageOnMe() {
+  if (!refs.virtualStage || !state.virtualJoined) return;
+  const container = refs.virtualStage.parentElement;
+  if (!container || container.scrollWidth <= container.clientWidth) return;
+  const x = clamp(Number(state.virtualPosition.x || 50), 0, 100) / 100;
+  const target = refs.virtualStage.scrollWidth * x - container.clientWidth / 2;
+  container.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
 }
 
 function readLocalVirtualMessages() {

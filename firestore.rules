@@ -49,7 +49,7 @@ service cloud.firestore {
       // 버츄얼 광장 위치 동기화용입니다. 공개 길드 포털에서 바로 쓰기 위한 간단 규칙입니다.
       allow create, update: if request.resource.data.keys().hasOnly([
           'userId', 'memberKey', 'nickname', 'guild', 'job', 'x', 'y',
-          'hp', 'maxHp', 'jailedUntil', 'attackedAt', 'lastAttacker',
+          'hp', 'maxHp', 'jailedUntil', 'shieldUntil', 'attackedAt', 'lastAttacker',
           'lastMessage', 'lastSeen', 'updatedAt'
         ])
         && request.resource.data.userId is string
@@ -76,6 +76,8 @@ service cloud.firestore {
         && request.resource.data.maxHp <= 1000000000000000000
         && request.resource.data.jailedUntil is string
         && request.resource.data.jailedUntil.size() <= 40
+        && request.resource.data.shieldUntil is string
+        && request.resource.data.shieldUntil.size() <= 40
         && request.resource.data.attackedAt is string
         && request.resource.data.attackedAt.size() <= 40
         && request.resource.data.lastAttacker is string
