@@ -137,6 +137,131 @@ export function createManualOverrideClient({
   };
 }
 
+
+export function createVirtualLobbyClient({
+  config,
+  collectionName = "virtualLobby",
+  onParticipants,
+  onMessages,
+  onError,
+  onStatus
+}) {
+  if (!isFirebaseConfigured(config)) {
+    onStatus?.("local", "Firebase 설정 전: 이 브라우저에서만 움직이는 데모 모드");
+    return {
+      enabled: false,
+      async upsertParticipant() {
+        throw new Error("Firebase 설정이 없습니다.");
+      },
+      async leave() {
+        throw new Error("Firebase 설정이 없습니다.");
+      },
+      async sendMessage() {
+        throw new Error("Firebase 설정이 없습니다.");
+      },
+      unsubscribe() {}
+    };
+  }
+
+  const app = getFirebaseApp(config);
+  const db = getFirestore(app);
+  const participantsRef = collection(db, collectionName, "plaza", "participants");
+  const messagesRef = collection(db, collectionName, "plaza", "messages");
+  const messagesQuery = query(messagesRef, orderBy("createdAt", "asc"));
+
+  onStatus?.("connecting", "버츄얼 광장 연결 중...");
+
+  const unsubscribeParticipants = onSnapshot(
+    participantsRef,
+    (snapshot) => {
+      const participants = snapshot.docs.map((item) => normalizeVirtualParticipant(item.id, item.data()));
+      onParticipants?.(participants);
+      onStatus?.("online", `실시간 광장 연결됨 · ${participants.length}명 접속`);
+    },
+    (error) => {
+      onError?.(error);
+      onStatus?.("error", `광장 연결 실패: ${error.message}`);
+    }
+  );
+
+  const unsubscribeMessages = onSnapshot(
+    messagesQuery,
+    (snapshot) => {
+      const messages = snapshot.docs.map((item) => normalizeVirtualMessage(item.id, item.data())).slice(-80);
+      onMessages?.(messages);
+    },
+    (error) => {
+      onError?.(error);
+    }
+  );
+
+  return {
+    enabled: true,
+    async upsertParticipant(participant) {
+      const id = safeDocId(participant.userId);
+      await setDoc(doc(participantsRef, id), {
+        userId: String(participant.userId || id),
+        memberKey: String(participant.memberKey || ""),
+        nickname: String(participant.nickname || "익명").slice(0, 30),
+        guild: String(participant.guild || "-").slice(0, 30),
+        job: String(participant.job || "-").slice(0, 40),
+        x: Number(participant.x || 50),
+        y: Number(participant.y || 55),
+        lastMessage: String(participant.lastMessage || "").slice(0, 120),
+        lastSeen: new Date().toISOString(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    },
+    async leave(userId) {
+      await deleteDoc(doc(participantsRef, safeDocId(userId)));
+    },
+    async sendMessage(message) {
+      await addDoc(messagesRef, {
+        userId: String(message.userId || ""),
+        nickname: String(message.nickname || "익명").slice(0, 30),
+        guild: String(message.guild || "-").slice(0, 30),
+        text: String(message.text || "").slice(0, 120),
+        createdAt: serverTimestamp()
+      });
+    },
+    unsubscribe() {
+      unsubscribeParticipants();
+      unsubscribeMessages();
+    }
+  };
+}
+
+function normalizeVirtualParticipant(id, data) {
+  return {
+    id,
+    userId: String(data.userId || id),
+    memberKey: String(data.memberKey || ""),
+    nickname: String(data.nickname || "익명"),
+    guild: String(data.guild || "-"),
+    job: String(data.job || "-"),
+    x: Number(data.x || 50),
+    y: Number(data.y || 55),
+    lastMessage: String(data.lastMessage || ""),
+    lastSeen: String(data.lastSeen || ""),
+    updatedAt: toIsoString(data.updatedAt) || data.updatedAt || ""
+  };
+}
+
+function normalizeVirtualMessage(id, data) {
+  return {
+    id,
+    userId: String(data.userId || ""),
+    nickname: String(data.nickname || "익명"),
+    guild: String(data.guild || "-"),
+    text: String(data.text || ""),
+    createdAt: toIsoString(data.createdAt) || data.createdAt || new Date().toISOString()
+  };
+}
+
+function safeDocId(value) {
+  return String(value || "unknown").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80) || "unknown";
+}
+
 function getFirebaseApp(config) {
   return getApps().length ? getApp() : initializeApp(config);
 }

@@ -17,6 +17,7 @@
       <div class="hero-actions main-nav" aria-label="메인 메뉴">
         <button class="main-tab active" data-page="dashboard" type="button">현황</button>
         <button class="main-tab" data-page="characters" type="button">캐릭터</button>
+        <button class="main-tab" data-page="virtual" type="button">광장</button>
         <button class="main-tab" data-page="guide" type="button">공략</button>
         <button class="main-tab" data-page="links" type="button">링크</button>
         <button class="main-tab" data-page="rest" type="button">쉬어가기</button>
@@ -122,6 +123,78 @@
 
       <section class="visual-overview" id="visual-overview"></section>
       <section class="character-grid" id="character-grid" aria-label="길드 캐릭터 이미지 목록"></section>
+    </section>
+
+
+    <section class="content-page" id="page-virtual">
+      <section class="virtual-layout">
+        <article class="virtual-card virtual-intro">
+          <p class="eyebrow mini">Virtual Plaza</p>
+          <h2>길드 버츄얼 광장</h2>
+          <p class="muted">내 캐릭터를 골라 광장에 입장하고, 다른 길드원 캐릭터와 만나서 짧게 채팅할 수 있습니다.</p>
+          <div class="virtual-status" id="virtual-status">광장 연결 확인 중...</div>
+
+          <label class="virtual-picker">
+            캐릭터 선택
+            <select id="virtual-character-select"></select>
+          </label>
+
+          <div class="virtual-selected">
+            <strong id="virtual-selected-name">캐릭터 선택 전</strong>
+            <div>
+              <span>전투력 <b id="virtual-power">-</b></span>
+              <span>토벌전 <b id="virtual-tobeol">-</b></span>
+            </div>
+          </div>
+
+          <div class="virtual-actions">
+            <button class="primary-btn" id="virtual-join" type="button">광장 입장</button>
+            <button class="secondary-btn" id="virtual-random" type="button">랜덤 이동</button>
+            <button class="danger-btn" id="virtual-leave" type="button" disabled>나가기</button>
+          </div>
+        </article>
+
+        <section class="virtual-stage-card">
+          <div class="virtual-stage-top">
+            <div>
+              <p class="eyebrow mini">Guild Plaza</p>
+              <h2>만남의 광장</h2>
+            </div>
+            <span class="online-pill">접속 <strong id="virtual-online-count">0명</strong></span>
+          </div>
+
+          <div class="virtual-stage" id="virtual-stage" aria-label="캐릭터 광장">
+            <div class="stage-decoration deco-1"></div>
+            <div class="stage-decoration deco-2"></div>
+            <div class="stage-road"></div>
+            <div class="virtual-avatars" id="virtual-avatars"></div>
+            <p class="virtual-hint" id="virtual-hint">캐릭터를 선택하고 입장하면 이동할 수 있습니다.</p>
+          </div>
+
+          <div class="virtual-controls" aria-label="캐릭터 이동 버튼">
+            <span></span>
+            <button type="button" data-virtual-move="up">▲</button>
+            <span></span>
+            <button type="button" data-virtual-move="left">◀</button>
+            <button type="button" data-virtual-move="down">▼</button>
+            <button type="button" data-virtual-move="right">▶</button>
+          </div>
+        </section>
+
+        <aside class="virtual-chat-panel">
+          <div class="panel-header compact">
+            <div>
+              <h2>광장 채팅</h2>
+              <p>입장한 캐릭터 이름으로 메시지가 표시됩니다.</p>
+            </div>
+          </div>
+          <div class="virtual-chat-list" id="virtual-chat-list"></div>
+          <div class="virtual-chat-form">
+            <input id="virtual-chat-input" type="text" maxlength="120" placeholder="메시지 입력" disabled />
+            <button class="primary-btn" id="virtual-chat-send" type="button" disabled>전송</button>
+          </div>
+        </aside>
+      </section>
     </section>
 
     <section class="content-page" id="page-guide">

@@ -1,6 +1,6 @@
 # 메키 길드 포털
 
-전투력/토벌전 현황, 실시간 공략 게시판, 주요 링크, 쉬어가기 게임 링크를 한 화면에서 볼 수 있는 GitHub Pages용 사이트입니다.
+전투력/토벌전 현황, 캐릭터 모아보기, 버츄얼 광장, 실시간 공략 게시판, 주요 링크, 쉬어가기 게임 링크를 한 화면에서 볼 수 있는 GitHub Pages용 사이트입니다.
 
 ## 실행
 
@@ -20,6 +20,8 @@ http://localhost:8080
 | 탭 | 내용 |
 |---|---|
 | 현황 | 전투력 / 토벌전 현황과 성장률 |
+| 캐릭터 | MGF 캐릭터 이미지와 전투력/토벌전 변화량 카드 |
+| 광장 | 캐릭터 선택, 이동, 실시간 채팅이 가능한 버츄얼 광장 |
 | 공략 | 공략 게시판 작성/조회 |
 | 링크 | 디스코드, 메키 단톡방 |
 | 쉬어가기 | 게임 1, 게임 2 |
@@ -69,7 +71,7 @@ Firebase Console에서:
 Firestore Database → Rules
 ```
 
-아래 파일 내용을 복사해서 붙여넣고 `Publish` 합니다. 이 Rules에는 공략 게시판(`guidePosts`)과 현재/7일 전 기준값 수동 보정(`weeklyOverrides`) 권한이 함께 들어 있습니다.
+아래 파일 내용을 복사해서 붙여넣고 `Publish` 합니다. 이 Rules에는 공략 게시판(`guidePosts`), 현재/7일 전 기준값 수동 보정(`weeklyOverrides`), 버츄얼 광장(`virtualLobby`) 권한이 함께 들어 있습니다.
 
 ```text
 firestore.rules
@@ -106,6 +108,17 @@ Firebase 설정 전에는 현재 브라우저에만 임시 저장됩니다.
 
 캐릭터 탭에서는 MGF 캐릭터 이미지 URL에 닉네임을 붙여 자동으로 이미지를 불러옵니다. 길드, 닉네임, 직업으로 필터링할 수 있고 전투력, 토벌전 점수, 전투력 변화량, 토벌전 변화량을 카드와 막대 그래프로 확인할 수 있습니다.
 
+
+## 버츄얼 광장
+
+광장 탭에서는 길드원 캐릭터를 선택해서 작은 월드에 입장할 수 있습니다.
+
+- 광장을 클릭하면 캐릭터가 해당 위치로 이동합니다.
+- 방향 버튼 또는 키보드 방향키로도 이동할 수 있습니다.
+- 입장 후 채팅을 보내면 캐릭터 머리 위 말풍선과 채팅창에 표시됩니다.
+- Firebase Firestore Rules를 배포하면 다른 접속자와 위치/채팅이 실시간으로 공유됩니다.
+- Firebase 연결 전에는 이 브라우저에서만 보이는 데모 모드로 동작합니다.
+
 ## 링크
 
 링크 탭에 아래 링크가 포함되어 있습니다.
@@ -138,7 +151,7 @@ data/history.json
 
 ## Firebase 설정 주의
 
-`src/firebase-config.js` 파일에는 `FIREBASE_CONFIG`, `FIREBASE_COLLECTION`, `FIREBASE_MANUAL_COLLECTION` 세 export가 모두 있어야 합니다. Firebase Console에서 복사한 초기화 코드 전체를 붙여넣지 말고 config 값만 `FIREBASE_CONFIG` 객체에 넣으세요.
+`src/firebase-config.js` 파일에는 `FIREBASE_CONFIG`, `FIREBASE_COLLECTION`, `FIREBASE_MANUAL_COLLECTION`, `FIREBASE_LOBBY_COLLECTION` export가 모두 있어야 합니다. Firebase Console에서 복사한 초기화 코드 전체를 붙여넣지 말고 config 값만 `FIREBASE_CONFIG` 객체에 넣으세요.
 
 
 ## 데이터 기준일과 수동 갱신

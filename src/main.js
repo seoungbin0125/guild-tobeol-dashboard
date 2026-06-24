@@ -1,9 +1,11 @@
-import { FIREBASE_COLLECTION, FIREBASE_CONFIG, FIREBASE_MANUAL_COLLECTION } from "./firebase-config.js";
-import { createGuideBoardClient, createManualOverrideClient, isFirebaseConfigured } from "./firebase-board.js";
+import { FIREBASE_COLLECTION, FIREBASE_CONFIG, FIREBASE_LOBBY_COLLECTION, FIREBASE_MANUAL_COLLECTION } from "./firebase-config.js";
+import { createGuideBoardClient, createManualOverrideClient, createVirtualLobbyClient, isFirebaseConfigured } from "./firebase-board.js";
 
 const EDIT_PASSWORD = "5645";
 const LOCAL_MANUAL_KEY = "guild-tobeol-dashboard.manual.v1";
 const LOCAL_POSTS_KEY = "guild-tobeol-dashboard.guide-posts.v1";
+const LOCAL_VIRTUAL_KEY = "guild-tobeol-dashboard.virtual-user.v1";
+const LOCAL_CHAT_KEY = "guild-tobeol-dashboard.virtual-chat.v1";
 
 const state = {
   rawData: null,
@@ -28,6 +30,14 @@ const state = {
   visualGuildFilter: "all",
   visualKeyword: "",
   visualSort: "powerGrowth",
+  virtualSelectedKey: "",
+  virtualJoined: false,
+  virtualClient: null,
+  virtualParticipants: [],
+  virtualMessages: [],
+  virtualPosition: { x: 50, y: 54 },
+  virtualStatus: "",
+  virtualUserId: getOrCreateVirtualUserId(),
   editorUnlocked: true
 };
 
@@ -52,6 +62,22 @@ const refs = {
   visualSort: document.getElementById("visual-sort"),
   visualOverview: document.getElementById("visual-overview"),
   characterGrid: document.getElementById("character-grid"),
+  virtualStatus: document.getElementById("virtual-status"),
+  virtualCharacterSelect: document.getElementById("virtual-character-select"),
+  virtualJoin: document.getElementById("virtual-join"),
+  virtualLeave: document.getElementById("virtual-leave"),
+  virtualRandom: document.getElementById("virtual-random"),
+  virtualStage: document.getElementById("virtual-stage"),
+  virtualAvatars: document.getElementById("virtual-avatars"),
+  virtualHint: document.getElementById("virtual-hint"),
+  virtualOnlineCount: document.getElementById("virtual-online-count"),
+  virtualSelectedName: document.getElementById("virtual-selected-name"),
+  virtualPower: document.getElementById("virtual-power"),
+  virtualTobeol: document.getElementById("virtual-tobeol"),
+  virtualChatList: document.getElementById("virtual-chat-list"),
+  virtualChatInput: document.getElementById("virtual-chat-input"),
+  virtualChatSend: document.getElementById("virtual-chat-send"),
+  virtualNudgeButtons: document.querySelectorAll("[data-virtual-move]"),
   footerText: document.getElementById("footer-text"),
   editDialog: document.getElementById("edit-dialog"),
   openEditor: document.getElementById("open-editor"),
@@ -110,6 +136,8 @@ async function init() {
     rebuildData();
     initGuildFilter();
     initVisualFilters();
+    initVirtualPicker();
+    initVirtualLobbyClient();
     renderPage();
   } catch (error) {
     refs.tableBody.innerHTML = `<tr><td colspan="99" class="empty">${escapeHtml(error.message)}</td></tr>`;
@@ -174,6 +202,31 @@ function bindEvents() {
     renderCharactersPage();
   });
 
+  refs.virtualCharacterSelect?.addEventListener("change", (event) => {
+    state.virtualSelectedKey = event.target.value;
+    if (state.virtualJoined) joinVirtualLobby(true);
+    renderVirtualPage();
+  });
+
+  refs.virtualJoin?.addEventListener("click", () => joinVirtualLobby(false));
+  refs.virtualLeave?.addEventListener("click", leaveVirtualLobby);
+  refs.virtualRandom?.addEventListener("click", moveVirtualRandom);
+  refs.virtualStage?.addEventListener("click", handleVirtualStageClick);
+  refs.virtualChatSend?.addEventListener("click", sendVirtualChat);
+  refs.virtualChatInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      sendVirtualChat();
+    }
+  });
+  refs.virtualNudgeButtons?.forEach((button) => {
+    button.addEventListener("click", () => nudgeVirtualAvatar(button.dataset.virtualMove));
+  });
+  document.addEventListener("keydown", handleVirtualKeydown);
+  window.addEventListener("beforeunload", () => {
+    if (state.virtualJoined && state.virtualClient?.enabled) state.virtualClient.leave(state.virtualUserId);
+  });
+
   refs.openEditor?.addEventListener("click", openEditor);
   refs.openEditorGuide?.addEventListener("click", openEditor);
   refs.closeEditor?.addEventListener("click", closeEditor);
@@ -209,6 +262,11 @@ function renderPage() {
 
   if (state.page === "characters") {
     renderCharactersPage();
+    return;
+  }
+
+  if (state.page === "virtual") {
+    renderVirtualPage();
     return;
   }
 
@@ -273,6 +331,25 @@ function initVisualFilters() {
   ].join("");
   refs.visualGuildFilter.value = state.visualGuildFilter;
   if (refs.visualSort) refs.visualSort.value = state.visualSort;
+}
+
+function initVirtualPicker() {
+  if (!refs.virtualCharacterSelect) return;
+
+  const members = [...(state.data?.members || [])].sort((a, b) => {
+    const guildCompare = String(a.guild || "").localeCompare(String(b.guild || ""), "ko");
+    if (guildCompare) return guildCompare;
+    return Number(a.rank || 9999) - Number(b.rank || 9999);
+  });
+
+  if (!state.virtualSelectedKey && members[0]) {
+    state.virtualSelectedKey = virtualMemberKey(members[0]);
+  }
+
+  refs.virtualCharacterSelect.innerHTML = members.map((member) => `
+    <option value="${escapeAttr(virtualMemberKey(member))}">${escapeHtml(member.guild || "-")} · ${escapeHtml(member.nickname || "-")} · ${escapeHtml(member.job || "-")}</option>
+  `).join("");
+  refs.virtualCharacterSelect.value = state.virtualSelectedKey;
 }
 
 function getGuilds() {
@@ -548,6 +625,370 @@ function averageNumeric(values) {
   return Math.round(valid.reduce((sum, value) => sum + value, 0) / valid.length);
 }
 
+
+function initVirtualLobbyClient() {
+  state.virtualMessages = readLocalVirtualMessages();
+  state.virtualClient = createVirtualLobbyClient({
+    config: FIREBASE_CONFIG,
+    collectionName: FIREBASE_LOBBY_COLLECTION,
+    onParticipants: (participants) => {
+      state.virtualParticipants = participants;
+      if (state.page === "virtual") renderVirtualPage();
+    },
+    onMessages: (messages) => {
+      state.virtualMessages = messages;
+      if (state.page === "virtual") renderVirtualChat();
+    },
+    onStatus: (status, message) => {
+      state.virtualStatus = message || status || "";
+      if (state.page === "virtual") renderVirtualStatus();
+    },
+    onError: (error) => {
+      console.error(error);
+      state.virtualStatus = `광장 연결 실패: ${error.message}`;
+      if (state.page === "virtual") renderVirtualStatus();
+    }
+  });
+
+  if (!state.virtualClient?.enabled) {
+    state.virtualStatus = "Firebase 설정 전: 이 브라우저에서만 움직이는 데모 모드";
+  }
+}
+
+function renderVirtualPage() {
+  if (!state.data) return;
+  if (!state.virtualSelectedKey) initVirtualPicker();
+
+  const member = getSelectedVirtualMember();
+  refs.title.textContent = "길드 버츄얼 광장";
+  refs.subtitle.textContent = "캐릭터를 골라 광장에서 움직이고 채팅하기";
+
+  renderVirtualStatus();
+  renderVirtualSelected(member);
+  renderVirtualWorld();
+  renderVirtualChat();
+
+  const count = getVirtualParticipantsForRender().filter((item) => !item.isGhost).length;
+  refs.footerText.textContent = state.virtualClient?.enabled
+    ? `실시간 광장 연결 · 현재 ${count}명 표시 중`
+    : "데모 모드 · Firebase 규칙을 배포하면 다른 사람과 실시간으로 만날 수 있습니다.";
+}
+
+function renderVirtualStatus() {
+  if (!refs.virtualStatus) return;
+  const mode = state.virtualClient?.enabled ? "online" : "local";
+  refs.virtualStatus.className = `virtual-status ${mode}`;
+  refs.virtualStatus.textContent = state.virtualStatus || (mode === "online" ? "실시간 광장 연결됨" : "데모 모드");
+}
+
+function renderVirtualSelected(member) {
+  if (!member) return;
+  if (refs.virtualSelectedName) refs.virtualSelectedName.textContent = `${member.nickname || "-"} · ${member.job || "-"}`;
+  if (refs.virtualPower) refs.virtualPower.textContent = formatKoreanPower(member.powerValue);
+  if (refs.virtualTobeol) refs.virtualTobeol.textContent = formatKoreanPower(member.tobeolValue);
+  if (refs.virtualJoin) refs.virtualJoin.textContent = state.virtualJoined ? "캐릭터 변경 적용" : "광장 입장";
+  if (refs.virtualLeave) refs.virtualLeave.disabled = !state.virtualJoined;
+  if (refs.virtualChatInput) refs.virtualChatInput.disabled = !state.virtualJoined;
+  if (refs.virtualChatSend) refs.virtualChatSend.disabled = !state.virtualJoined;
+}
+
+function renderVirtualWorld() {
+  if (!refs.virtualAvatars) return;
+  const participants = getVirtualParticipantsForRender();
+  const onlineCount = participants.filter((item) => !item.isGhost).length;
+  if (refs.virtualOnlineCount) refs.virtualOnlineCount.textContent = `${onlineCount}명`; 
+  if (refs.virtualHint) refs.virtualHint.textContent = state.virtualJoined
+    ? "광장을 누르거나 방향 버튼/키보드 방향키로 이동할 수 있습니다."
+    : "캐릭터를 선택하고 입장하면 내 캐릭터가 광장에 나타납니다.";
+
+  refs.virtualAvatars.innerHTML = participants.map((participant) => renderVirtualAvatar(participant)).join("");
+}
+
+function renderVirtualAvatar(participant) {
+  const member = participant.member || {};
+  const isMe = participant.userId === state.virtualUserId;
+  const x = clamp(Number(participant.x ?? 50), 5, 95);
+  const y = clamp(Number(participant.y ?? 55), 10, 90);
+  const imageUrl = getCharacterImageUrl(member.nickname || participant.nickname);
+  const bubble = participant.lastMessage ? `<div class="avatar-bubble">${escapeHtml(participant.lastMessage)}</div>` : "";
+
+  return `
+    <button class="virtual-avatar ${isMe ? "is-me" : ""} ${participant.isGhost ? "is-ghost" : ""}" type="button" style="--x:${x}%; --y:${y}%" title="${escapeAttr(participant.nickname || "캐릭터")}">
+      ${bubble}
+      <span class="avatar-shadow"></span>
+      <img src="${escapeAttr(imageUrl)}" alt="${escapeAttr(participant.nickname || "캐릭터")}" loading="lazy" decoding="async" onerror="this.closest('.virtual-avatar').classList.add('is-missing'); this.remove();" />
+      <span class="avatar-fallback">?</span>
+      <strong>${escapeHtml(participant.nickname || "-")}</strong>
+      <small>${escapeHtml(participant.guild || "-")}</small>
+    </button>
+  `;
+}
+
+function renderVirtualChat() {
+  if (!refs.virtualChatList) return;
+  const messages = [...(state.virtualMessages || [])].slice(-40);
+
+  if (!messages.length) {
+    refs.virtualChatList.innerHTML = `<div class="virtual-empty">아직 채팅이 없습니다. 입장 후 첫 인사를 남겨보세요.</div>`;
+    return;
+  }
+
+  refs.virtualChatList.innerHTML = messages.map((message) => `
+    <article class="chat-message ${message.userId === state.virtualUserId ? "is-me" : ""}">
+      <div>
+        <strong>${escapeHtml(message.nickname || "익명")}</strong>
+        <span>${formatChatTime(message.createdAt)}</span>
+      </div>
+      <p>${escapeHtml(message.text || "")}</p>
+    </article>
+  `).join("");
+  refs.virtualChatList.scrollTop = refs.virtualChatList.scrollHeight;
+}
+
+async function joinVirtualLobby(keepPosition = false) {
+  const member = getSelectedVirtualMember();
+  if (!member) return;
+  if (!keepPosition) state.virtualPosition = randomVirtualPosition();
+  state.virtualJoined = true;
+
+  const participant = makeVirtualParticipant(member, state.virtualPosition);
+
+  if (state.virtualClient?.enabled) {
+    await state.virtualClient.upsertParticipant(participant);
+  } else {
+    upsertLocalParticipant(participant);
+  }
+
+  renderVirtualPage();
+}
+
+async function leaveVirtualLobby() {
+  state.virtualJoined = false;
+  if (state.virtualClient?.enabled) {
+    await state.virtualClient.leave(state.virtualUserId);
+  } else {
+    state.virtualParticipants = state.virtualParticipants.filter((item) => item.userId !== state.virtualUserId);
+  }
+  renderVirtualPage();
+}
+
+function moveVirtualRandom() {
+  if (!state.virtualJoined) {
+    joinVirtualLobby(false);
+    return;
+  }
+  updateVirtualPosition(randomVirtualPosition());
+}
+
+function handleVirtualStageClick(event) {
+  if (!state.virtualJoined || !refs.virtualStage) return;
+  if (event.target.closest(".virtual-controls, .virtual-chat-panel, .virtual-avatar")) return;
+  const rect = refs.virtualStage.getBoundingClientRect();
+  const x = ((event.clientX - rect.left) / rect.width) * 100;
+  const y = ((event.clientY - rect.top) / rect.height) * 100;
+  updateVirtualPosition({ x, y });
+}
+
+function handleVirtualKeydown(event) {
+  if (state.page !== "virtual" || !state.virtualJoined) return;
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
+  const map = {
+    ArrowUp: "up",
+    ArrowDown: "down",
+    ArrowLeft: "left",
+    ArrowRight: "right"
+  };
+  if (!map[event.key]) return;
+  event.preventDefault();
+  nudgeVirtualAvatar(map[event.key]);
+}
+
+function nudgeVirtualAvatar(direction) {
+  if (!state.virtualJoined) return;
+  const step = 5.5;
+  const next = { ...state.virtualPosition };
+  if (direction === "up") next.y -= step;
+  if (direction === "down") next.y += step;
+  if (direction === "left") next.x -= step;
+  if (direction === "right") next.x += step;
+  updateVirtualPosition(next);
+}
+
+async function updateVirtualPosition(position) {
+  const member = getSelectedVirtualMember();
+  if (!member) return;
+  state.virtualPosition = {
+    x: clamp(Number(position.x), 5, 95),
+    y: clamp(Number(position.y), 10, 90)
+  };
+
+  const participant = makeVirtualParticipant(member, state.virtualPosition);
+  if (state.virtualClient?.enabled) {
+    await state.virtualClient.upsertParticipant(participant);
+  } else {
+    upsertLocalParticipant(participant);
+  }
+  renderVirtualWorld();
+}
+
+async function sendVirtualChat() {
+  if (!state.virtualJoined || !refs.virtualChatInput) return;
+  const text = refs.virtualChatInput.value.trim().slice(0, 120);
+  if (!text) return;
+  const member = getSelectedVirtualMember();
+  const message = {
+    id: `local-${Date.now()}`,
+    userId: state.virtualUserId,
+    nickname: member?.nickname || "익명",
+    guild: member?.guild || "-",
+    text,
+    createdAt: new Date().toISOString()
+  };
+
+  refs.virtualChatInput.value = "";
+
+  if (state.virtualClient?.enabled) {
+    await state.virtualClient.sendMessage(message);
+    await state.virtualClient.upsertParticipant({
+      ...makeVirtualParticipant(member, state.virtualPosition),
+      lastMessage: text
+    });
+  } else {
+    state.virtualMessages = [...state.virtualMessages, message].slice(-80);
+    localStorage.setItem(LOCAL_CHAT_KEY, JSON.stringify({ messages: state.virtualMessages }));
+    upsertLocalParticipant({ ...makeVirtualParticipant(member, state.virtualPosition), lastMessage: text });
+    renderVirtualChat();
+    renderVirtualWorld();
+  }
+}
+
+function getVirtualParticipantsForRender() {
+  const map = new Map();
+  const membersByKey = new Map((state.data?.members || []).map((member) => [virtualMemberKey(member), member]));
+
+  for (const participant of state.virtualParticipants || []) {
+    const member = membersByKey.get(participant.memberKey) || findMemberByName(participant.guild, participant.nickname);
+    map.set(participant.userId, {
+      ...participant,
+      member,
+      x: Number(participant.x ?? 50),
+      y: Number(participant.y ?? 55)
+    });
+  }
+
+  if (state.virtualJoined && !map.has(state.virtualUserId)) {
+    const member = getSelectedVirtualMember();
+    map.set(state.virtualUserId, makeVirtualParticipant(member, state.virtualPosition));
+  }
+
+  const realParticipants = [...map.values()].filter((item) => isRecentParticipant(item));
+  if (realParticipants.length >= 2 || state.virtualJoined) return realParticipants;
+
+  return getDemoVirtualParticipants(realParticipants);
+}
+
+function getDemoVirtualParticipants(realParticipants) {
+  const already = new Set(realParticipants.map((item) => item.memberKey));
+  const demoMembers = [...(state.data?.members || [])]
+    .filter((member) => !already.has(virtualMemberKey(member)))
+    .sort((a, b) => Number(b.powerValue || 0) - Number(a.powerValue || 0))
+    .slice(0, 7);
+
+  return [
+    ...realParticipants,
+    ...demoMembers.map((member, index) => ({
+      userId: `ghost-${index}`,
+      memberKey: virtualMemberKey(member),
+      nickname: member.nickname,
+      guild: member.guild,
+      job: member.job,
+      x: [18, 34, 50, 67, 82, 24, 74][index] || 50,
+      y: [28, 64, 42, 70, 34, 78, 52][index] || 50,
+      lastSeen: new Date().toISOString(),
+      member,
+      isGhost: true
+    }))
+  ];
+}
+
+function makeVirtualParticipant(member, position) {
+  return {
+    userId: state.virtualUserId,
+    memberKey: virtualMemberKey(member),
+    nickname: member?.nickname || "익명",
+    guild: member?.guild || "-",
+    job: member?.job || "-",
+    x: clamp(Number(position?.x ?? 50), 5, 95),
+    y: clamp(Number(position?.y ?? 55), 10, 90),
+    lastSeen: new Date().toISOString()
+  };
+}
+
+function upsertLocalParticipant(participant) {
+  const byId = new Map((state.virtualParticipants || []).map((item) => [item.userId, item]));
+  byId.set(participant.userId, participant);
+  state.virtualParticipants = [...byId.values()];
+}
+
+function getSelectedVirtualMember() {
+  const members = state.data?.members || [];
+  return members.find((member) => virtualMemberKey(member) === state.virtualSelectedKey) || members[0] || null;
+}
+
+function virtualMemberKey(member) {
+  return `${String(member?.guild || "").trim()}::${String(member?.nickname || "").trim()}`;
+}
+
+function findMemberByName(guild, nickname) {
+  return (state.data?.members || []).find((member) => member.guild === guild && member.nickname === nickname) || null;
+}
+
+function randomVirtualPosition() {
+  return {
+    x: 14 + Math.random() * 72,
+    y: 18 + Math.random() * 64
+  };
+}
+
+function readLocalVirtualMessages() {
+  try {
+    const raw = localStorage.getItem(LOCAL_CHAT_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed?.messages) ? parsed.messages : [];
+  } catch {
+    return [];
+  }
+}
+
+function getOrCreateVirtualUserId() {
+  try {
+    const existing = localStorage.getItem(LOCAL_VIRTUAL_KEY);
+    if (existing) return existing;
+    const id = `u-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    localStorage.setItem(LOCAL_VIRTUAL_KEY, id);
+    return id;
+  } catch {
+    return `u-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+}
+
+function isRecentParticipant(participant) {
+  if (participant.isGhost) return true;
+  const lastSeen = new Date(participant.lastSeen || participant.updatedAt || Date.now()).getTime();
+  if (!Number.isFinite(lastSeen)) return true;
+  return Date.now() - lastSeen < 1000 * 60 * 60 * 2;
+}
+
+function formatChatTime(value) {
+  const date = new Date(value || Date.now());
+  if (Number.isNaN(date.getTime())) return "방금";
+  return date.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, Number(value || 0)));
+}
+
 function getGuildFilteredMembers() {
   return [...(state.data?.members || [])]
     .filter((member) => state.guildFilter === "all" || member.guild === state.guildFilter);
@@ -801,8 +1242,10 @@ async function applyManualFromEditor() {
     rebuildData();
     initGuildFilter();
     initVisualFilters();
+    initVirtualPicker();
     render();
     if (state.page === "characters") renderCharactersPage();
+    if (state.page === "virtual") renderVirtualPage();
   } catch (error) {
     refs.editorMessage.textContent = `저장 실패: ${error.message}`;
   } finally {
@@ -834,6 +1277,7 @@ async function clearLocalManual() {
     rebuildData();
     render();
     if (state.page === "characters") renderCharactersPage();
+    if (state.page === "virtual") renderVirtualPage();
     renderEditorRows();
   } catch (error) {
     refs.editorMessage.textContent = `초기화 실패: ${error.message}`;
@@ -887,6 +1331,9 @@ function initManualClient() {
       }
       if (state.page === "characters") {
         renderCharactersPage();
+      }
+      if (state.page === "virtual") {
+        renderVirtualPage();
       }
     },
     onError: (error) => {

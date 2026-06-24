@@ -41,5 +41,57 @@ service cloud.firestore {
 
       allow delete: if true;
     }
+
+
+    match /virtualLobby/plaza/participants/{participantId} {
+      allow read: if true;
+
+      // 버츄얼 광장 위치 동기화용입니다. 공개 길드 포털에서 바로 쓰기 위한 간단 규칙입니다.
+      allow create, update: if request.resource.data.keys().hasOnly([
+          'userId', 'memberKey', 'nickname', 'guild', 'job', 'x', 'y', 'lastMessage', 'lastSeen', 'updatedAt'
+        ])
+        && request.resource.data.userId is string
+        && request.resource.data.userId.size() <= 80
+        && request.resource.data.memberKey is string
+        && request.resource.data.memberKey.size() <= 80
+        && request.resource.data.nickname is string
+        && request.resource.data.nickname.size() <= 30
+        && request.resource.data.guild is string
+        && request.resource.data.guild.size() <= 30
+        && request.resource.data.job is string
+        && request.resource.data.job.size() <= 40
+        && request.resource.data.x is number
+        && request.resource.data.x >= 0
+        && request.resource.data.x <= 100
+        && request.resource.data.y is number
+        && request.resource.data.y >= 0
+        && request.resource.data.y <= 100
+        && request.resource.data.lastMessage is string
+        && request.resource.data.lastMessage.size() <= 120
+        && request.resource.data.lastSeen is string
+        && request.resource.data.lastSeen.size() <= 40;
+
+      allow delete: if true;
+    }
+
+    match /virtualLobby/plaza/messages/{messageId} {
+      allow read: if true;
+
+      allow create: if request.resource.data.keys().hasOnly([
+          'userId', 'nickname', 'guild', 'text', 'createdAt'
+        ])
+        && request.resource.data.userId is string
+        && request.resource.data.userId.size() <= 80
+        && request.resource.data.nickname is string
+        && request.resource.data.nickname.size() <= 30
+        && request.resource.data.guild is string
+        && request.resource.data.guild.size() <= 30
+        && request.resource.data.text is string
+        && request.resource.data.text.size() >= 1
+        && request.resource.data.text.size() <= 120;
+
+      allow update: if false;
+      allow delete: if true;
+    }
   }
 }
