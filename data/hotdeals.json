@@ -1,12 +1,83 @@
 {
-  "ok": false,
+  "ok": true,
   "version": 1,
   "source": "arca.live hotdeal",
   "sourceUrl": "https://arca.live/b/hotdeal?target=all&keyword=%EA%B8%B0%ED%94%84%ED%8A%B8%EC%B9%B4%EB%93%9C",
   "keyword": "기프트카드",
-  "capturedAt": "",
-  "selectionMode": "empty",
-  "totalCandidates": 0,
-  "activeCandidates": 0,
-  "items": []
+  "capturedAt": "2026-06-24 23:57",
+  "selectionMode": "active-first",
+  "totalCandidates": 19,
+  "activeCandidates": 19,
+  "items": [
+    {
+      "title": "CU 편의점",
+      "url": "https://arca.live/b/hotdeal/174314493?target=all&amp;keyword=%EA%B8%B0%ED%94%84%ED%8A%B8%EC%B9%B4%EB%93%9C&amp;p=1",
+      "status": "active",
+      "reason": "종료 문구가 없고 기프트카드/상품권 할인 키워드가 있어 유효 가능으로 표시합니다.",
+      "relativeTime": "",
+      "dateText": "",
+      "priceText": "",
+      "shop": "",
+      "badges": [
+        "CU 편의점",
+        "상품권/쿠폰"
+      ]
+    },
+    {
+      "title": "지마켓",
+      "url": "https://arca.live/b/hotdeal/173910565?target=all&amp;keyword=%EA%B8%B0%ED%94%84%ED%8A%B8%EC%B9%B4%EB%93%9C&amp;p=1",
+      "status": "active",
+      "reason": "종료 문구가 없고 기프트카드/상품권 할인 키워드가 있어 유효 가능으로 표시합니다.",
+      "relativeTime": "",
+      "dateText": "",
+      "priceText": "",
+      "shop": "",
+      "badges": [
+        "지마켓",
+        "상품권/쿠폰"
+      ]
+    },
+    {
+      "title": "네이버",
+      "url": "https://arca.live/b/hotdeal/173322124?target=all&amp;keyword=%EA%B8%B0%ED%94%84%ED%8A%B8%EC%B9%B4%EB%93%9C&amp;p=1",
+      "status": "active",
+      "reason": "종료 문구가 없고 기프트카드/상품권 할인 키워드가 있어 유효 가능으로 표시합니다.",
+      "relativeTime": "",
+      "dateText": "",
+      "priceText": "",
+      "shop": "",
+      "badges": [
+        "네이버",
+        "상품권/쿠폰"
+      ]
+    },
+    {
+      "title": "GS25",
+      "url": "https://arca.live/b/hotdeal/172754788?target=all&amp;keyword=%EA%B8%B0%ED%94%84%ED%8A%B8%EC%B9%B4%EB%93%9C&amp;p=1",
+      "status": "active",
+      "reason": "종료 문구가 없고 기프트카드/상품권 할인 키워드가 있어 유효 가능으로 표시합니다.",
+      "relativeTime": "",
+      "dateText": "",
+      "priceText": "",
+      "shop": "",
+      "badges": [
+        "GS25",
+        "상품권/쿠폰"
+      ]
+    },
+    {
+      "title": "네이버",
+      "url": "https://arca.live/b/hotdeal/172705019?target=all&amp;keyword=%EA%B8%B0%ED%94%84%ED%8A%B8%EC%B9%B4%EB%93%9C&amp;p=1",
+      "status": "active",
+      "reason": "종료 문구가 없고 기프트카드/상품권 할인 키워드가 있어 유효 가능으로 표시합니다.",
+      "relativeTime": "",
+      "dateText": "",
+      "priceText": "",
+      "shop": "",
+      "badges": [
+        "네이버",
+        "상품권/쿠폰"
+      ]
+    }
+  ]
 }

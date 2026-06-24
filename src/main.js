@@ -1,6 +1,7 @@
 import { FIREBASE_COLLECTION, FIREBASE_CONFIG, FIREBASE_GAME_COLLECTION, FIREBASE_LOBBY_COLLECTION, FIREBASE_MANUAL_COLLECTION } from "./firebase-config.js";
 import { createGuideBoardClient, createJellyGameClient, createManualOverrideClient, createVirtualLobbyClient, isFirebaseConfigured } from "./firebase-board.js";
 
+const APP_VERSION = "v1.13.0";
 const EDIT_PASSWORD = "5645";
 const LOCAL_MANUAL_KEY = "guild-tobeol-dashboard.manual.v1";
 const LOCAL_POSTS_KEY = "guild-tobeol-dashboard.guide-posts.v1";
@@ -220,7 +221,7 @@ async function init() {
     renderPage();
   } catch (error) {
     refs.tableBody.innerHTML = `<tr><td colspan="99" class="empty">${escapeHtml(error.message)}</td></tr>`;
-    refs.footerText.textContent = "data/latest.json 파일을 확인해주세요.";
+    refs.footerText.textContent = `${APP_VERSION} · data/latest.json 파일을 확인해주세요.`;
   }
 }
 
@@ -336,9 +337,14 @@ function bindEvents() {
   });
   document.addEventListener("keydown", handleVirtualKeydown);
   document.addEventListener("keydown", handleGameKeydown);
-  window.addEventListener("beforeunload", () => {
-    if (state.virtualJoined && state.virtualClient?.enabled) state.virtualClient.leave(state.virtualUserId);
-    if (state.gameJoined && state.gameClient?.enabled) state.gameClient.leave(state.gameUserId);
+  const cleanupPresence = () => {
+    cleanupVirtualPresence();
+    if (state.gameJoined && state.gameClient?.enabled) state.gameClient.leave(state.gameUserId).catch?.(() => {});
+  };
+  window.addEventListener("pagehide", cleanupPresence);
+  window.addEventListener("beforeunload", cleanupPresence);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") cleanupPresence();
   });
 
   refs.openEditor?.addEventListener("click", openEditor);
@@ -398,21 +404,21 @@ function renderPage() {
     refs.title.textContent = "공략 게시판";
     refs.subtitle.textContent = "길드 공략을 작성하고 공유하는 공간";
     renderPosts();
-    refs.footerText.textContent = state.boardMode === "firebase" ? "공략글은 실시간 게시판 서버에 저장됩니다." : "Firebase 설정 전이라 이 브라우저에만 임시 저장됩니다.";
+    refs.footerText.textContent = `${APP_VERSION} · 공략을 확인하고 작성할 수 있습니다.`;
     return;
   }
 
   if (state.page === "links") {
     refs.title.textContent = "길드 링크";
     refs.subtitle.textContent = "디스코드와 메키 단톡방 바로가기";
-    refs.footerText.textContent = "외부 링크는 새 창으로 열립니다.";
+    refs.footerText.textContent = `${APP_VERSION} · 외부 링크는 새 창으로 열립니다.`;
     return;
   }
 
   if (state.page === "rest") {
     refs.title.textContent = "쉬어가기";
     refs.subtitle.textContent = "게임 1 · 게임 2";
-    refs.footerText.textContent = "잠깐 쉬었다 가도 됩니다. 이게 진짜 효율 사냥일지도.";
+    refs.footerText.textContent = `${APP_VERSION} · 잠깐 쉬었다 가도 됩니다. 이게 진짜 효율 사냥일지도.`;
   }
 }
 
@@ -786,9 +792,9 @@ function render() {
 
   if (state.page !== "dashboard") return;
 
-  const manualText = data.manualAppliedCount > 0 ? ` · 수동 보정 ${data.manualAppliedCount}건 포함` : "";
+  const editText = data.manualAppliedCount > 0 ? ` · 수정 ${data.manualAppliedCount}건 반영` : "";
   const comparisonText = getComparisonDateText(data, state.guildFilter);
-  refs.footerText.textContent = `${selectedGuildText || "-"} 길드 내부 참고용 · 현재 ${data.capturedDate || "-"} 수집 · 7일 전 비교 ${comparisonText}${manualText}`;
+  refs.footerText.textContent = `${APP_VERSION} · ${selectedGuildText || "-"} · 현재 ${data.capturedDate || "-"} 수집 · 7일 전 비교 ${comparisonText}${editText}`;
 }
 
 function getComparisonDateText(data, guildFilter) {
@@ -862,8 +868,8 @@ function renderCharactersPage() {
   renderVisualOverview();
   renderCharacterGrid(members);
 
-  const manualText = data.manualAppliedCount > 0 ? ` · 수동 보정 ${data.manualAppliedCount}건 포함` : "";
-  refs.footerText.textContent = `${members.length}명 표시 중 · 현재 ${data.capturedDate || "-"} 수집 · 이미지 닉네임 매칭${manualText}`;
+  const editText = data.manualAppliedCount > 0 ? ` · 수정 ${data.manualAppliedCount}건 반영` : "";
+  refs.footerText.textContent = `${APP_VERSION} · ${members.length}명 표시 중 · 현재 ${data.capturedDate || "-"} 수집${editText}`;
 }
 
 function getVisualFilteredMembers() {
@@ -953,7 +959,7 @@ function renderCharacterGrid(members) {
 function renderCharacterCard(member, index, max) {
   const imageUrl = getCharacterImageUrl(member.nickname);
   const rank = member.rank ? `#${member.rank}` : `#${index + 1}`;
-  const manualBadge = member.isManual ? `<span class="manual-badge">수동</span>` : "";
+  const manualBadge = member.isManual ? `<span class="manual-badge">수정</span>` : "";
   const statusBadge = renderMemberStatusBadge(member);
   const powerGrowth = member.powerGrowthValue == null ? null : Number(member.powerGrowthValue);
   const tobeolGrowth = member.tobeolGrowthValue == null ? null : Number(member.tobeolGrowthValue);
@@ -1063,7 +1069,7 @@ function initVirtualLobbyClient() {
   });
 
   if (!state.virtualClient?.enabled) {
-    state.virtualStatus = "Firebase 설정 전: 이 브라우저에서만 움직이는 데모 모드";
+    state.virtualStatus = "데모 모드: 이 브라우저에서만 움직입니다";
   }
 }
 
@@ -1225,12 +1231,26 @@ async function joinVirtualLobby(keepPosition = false) {
 async function leaveVirtualLobby() {
   state.virtualJoined = false;
   stopVirtualLoop();
-  if (state.virtualClient?.enabled) {
-    await state.virtualClient.leave(state.virtualUserId);
-  } else {
-    state.virtualParticipants = state.virtualParticipants.filter((item) => item.userId !== state.virtualUserId);
+  state.virtualActionMessage = "";
+  state.virtualParticipants = state.virtualParticipants.filter((item) => item.userId !== state.virtualUserId);
+  try {
+    if (state.virtualClient?.enabled) {
+      await state.virtualClient.leave(state.virtualUserId);
+    }
+  } catch (error) {
+    console.warn("광장 퇴장 처리 실패", error);
   }
   renderVirtualPage();
+}
+
+function cleanupVirtualPresence() {
+  if (!state.virtualJoined) return;
+  state.virtualJoined = false;
+  stopVirtualLoop();
+  state.virtualParticipants = state.virtualParticipants.filter((item) => item.userId !== state.virtualUserId);
+  if (state.virtualClient?.enabled) {
+    state.virtualClient.leave(state.virtualUserId).catch?.(() => {});
+  }
 }
 
 function moveVirtualRandom() {
@@ -1580,26 +1600,10 @@ function calculateVirtualAttackDamage(attackerMember, targetMember, damageRate =
   return Math.max(1, Math.round(attackerPower * damageRate * ratioBonus));
 }
 
-async function addVirtualSystemMessage(text) {
-  const message = {
-    id: `battle-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    userId: "plaza-battle",
-    nickname: "광장 전투",
-    guild: "SYSTEM",
-    text: String(text || "").slice(0, 120),
-    createdAt: new Date().toISOString()
-  };
-
-  if (state.virtualClient?.enabled) {
-    await state.virtualClient.sendMessage(message);
-    return;
-  }
-
-  state.virtualMessages = [...state.virtualMessages, message].slice(-80);
-  try {
-    localStorage.setItem(LOCAL_CHAT_KEY, JSON.stringify({ messages: state.virtualMessages }));
-  } catch {}
+async function addVirtualSystemMessage() {
+  // 전투 알림은 채팅창에 올리지 않습니다.
 }
+
 
 function getMyVirtualParticipant() {
   return (state.virtualParticipants || []).find((participant) => participant.userId === state.virtualUserId) || null;
@@ -1798,7 +1802,7 @@ function isRecentParticipant(participant) {
   if (participant.isGhost) return true;
   const lastSeen = new Date(participant.lastSeen || participant.updatedAt || Date.now()).getTime();
   if (!Number.isFinite(lastSeen)) return true;
-  return Date.now() - lastSeen < 1000 * 60 * 60 * 2;
+  return Date.now() - lastSeen < 1000 * 35;
 }
 
 function formatChatTime(value) {
@@ -1867,7 +1871,7 @@ function initJellyGameClient() {
   });
 
   if (!state.gameClient?.enabled) {
-    state.gameStatus = "Firebase 설정 전: 이 브라우저에서 봇과 연습하는 데모 모드";
+    state.gameStatus = "데모 모드: 이 브라우저에서 봇과 연습합니다";
   }
 }
 
@@ -2523,7 +2527,7 @@ function renderGuild(member) {
 }
 
 function renderName(member) {
-  const manualBadge = member.isManual ? `<span class="manual-badge">수동</span>` : "";
+  const manualBadge = member.isManual ? `<span class="manual-badge">수정</span>` : "";
   const statusBadge = renderMemberStatusBadge(member);
   return `
     <div class="nickname">${escapeHtml(member.nickname)} ${manualBadge} ${statusBadge}</div>
@@ -2705,19 +2709,17 @@ function collectManualFromEditor() {
 async function applyManualFromEditor() {
   const manual = collectManualFromEditor();
   refs.applyManual.disabled = true;
-  refs.editorMessage.textContent = state.manualClient?.enabled
-    ? "서버에 수동 보정값을 저장 중입니다..."
-    : "Firebase 설정 전이라 이 브라우저에 저장 중입니다...";
+  refs.editorMessage.textContent = "수정 내용을 저장 중입니다...";
 
   try {
     if (state.manualClient?.enabled) {
       await state.manualClient.saveManual(manual);
       state.serverManual = manual;
-      refs.editorMessage.textContent = `수동 보정값 ${manual.items.length}건을 서버에 저장했습니다. 새로고침 후에도 전체 사용자에게 동일하게 반영됩니다.`;
+      refs.editorMessage.textContent = `수정 내용 ${manual.items.length}건을 저장했습니다.`;
     } else {
       state.localManual = manual;
       localStorage.setItem(LOCAL_MANUAL_KEY, JSON.stringify(manual));
-      refs.editorMessage.textContent = `수동 보정값 ${manual.items.length}건을 이 브라우저에 저장했습니다. Firebase 설정을 완료하면 전체 사용자에게 반영됩니다.`;
+      refs.editorMessage.textContent = `수정 내용 ${manual.items.length}건을 이 브라우저에 저장했습니다.`;
     }
 
     rebuildData();
@@ -2743,18 +2745,18 @@ async function clearLocalManual() {
     items: []
   };
 
-  if (!confirm("저장된 수동 보정값을 초기화할까요?")) return;
+  if (!confirm("저장된 수정값을 초기화할까요?")) return;
 
   refs.clearManual.disabled = true;
   try {
     if (state.manualClient?.enabled) {
       await state.manualClient.saveManual(emptyManual);
       state.serverManual = emptyManual;
-      refs.editorMessage.textContent = "서버에 저장된 수동 보정값을 초기화했습니다.";
+      refs.editorMessage.textContent = "저장된 수정값을 초기화했습니다.";
     } else {
       localStorage.removeItem(LOCAL_MANUAL_KEY);
       state.localManual = null;
-      refs.editorMessage.textContent = "이 브라우저에 저장된 수동 보정값을 초기화했습니다.";
+      refs.editorMessage.textContent = "이 브라우저의 수정값을 초기화했습니다.";
     }
 
     rebuildData();
@@ -2836,7 +2838,7 @@ function syncBoardUi(status, message) {
   if (refs.boardStatus) {
     const mode = state.firebaseBoard?.enabled ? "online" : "local";
     refs.boardStatus.className = `board-status ${status || mode}`;
-    refs.boardStatus.textContent = message || (mode === "online" ? "실시간 게시판 연결됨" : "Firebase 설정 전: 브라우저 임시 저장 모드");
+    refs.boardStatus.textContent = message || (mode === "online" ? "실시간 게시판 연결됨" : "임시 저장 모드");
   }
 
   if (refs.firebaseSetupNotice) {
@@ -2848,7 +2850,7 @@ function syncBoardUi(status, message) {
   }
 
   if (refs.clearLocalPosts) {
-    refs.clearLocalPosts.textContent = state.firebaseBoard?.enabled ? "서버 게시글은 삭제 버튼으로 관리" : "내 임시글 초기화";
+    refs.clearLocalPosts.textContent = state.firebaseBoard?.enabled ? "게시글은 삭제 버튼으로 관리" : "내 임시글 초기화";
     refs.clearLocalPosts.disabled = Boolean(state.firebaseBoard?.enabled);
   }
 }
@@ -2890,19 +2892,19 @@ async function savePostFromForm() {
   };
 
   refs.savePost.disabled = true;
-  refs.postMessage.textContent = state.boardMode === "firebase" ? "게시판 서버에 저장 중입니다..." : "브라우저에 임시 저장 중입니다...";
+  refs.postMessage.textContent = "공략글 저장 중입니다...";
 
   try {
     if (state.firebaseBoard?.enabled) {
       await state.firebaseBoard.addPost(post);
-      refs.postMessage.textContent = "공략글을 게시판 서버에 저장했습니다.";
+      refs.postMessage.textContent = "공략글을 저장했습니다.";
     } else {
       const localPosts = normalizePosts(state.localPosts);
       state.localPosts = [post, ...localPosts];
       localStorage.setItem(LOCAL_POSTS_KEY, JSON.stringify({ posts: state.localPosts }));
       rebuildPosts();
       renderPosts();
-      refs.postMessage.textContent = "Firebase 설정 전이라 이 브라우저에만 임시 저장했습니다.";
+      refs.postMessage.textContent = "이 브라우저에 임시 저장했습니다.";
     }
     resetPostForm(false);
   } catch (error) {
@@ -3343,7 +3345,7 @@ function renderMemberCard(member, index) {
     : renderGrowth(member.powerGrowthValue, member.powerGrowthText);
   const rateValue = isTobeol ? renderRate(member.tobeolGrowthRate) : renderRate(member.powerGrowthRate);
   const rank = member.rank ? `#${escapeHtml(member.rank)}` : `#${index + 1}`;
-  const manualBadge = member.isManual ? `<span class="manual-badge">수동</span>` : "";
+  const manualBadge = member.isManual ? `<span class="manual-badge">수정</span>` : "";
   const statusBadge = renderMemberStatusBadge(member);
 
   return `

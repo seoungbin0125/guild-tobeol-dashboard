@@ -4143,3 +4143,84 @@ footer {
     grid-template-columns: repeat(2, 58px);
   }
 }
+
+/* v1.13.0: visible version + cleaner mobile plaza */
+.version-pill,
+.footer-version {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  padding: 0 8px;
+  margin-left: 6px;
+  border: 1px solid rgba(147,197,253,0.72);
+  border-radius: 999px;
+  color: var(--primary-dark);
+  background: rgba(239,246,255,0.92);
+  font-size: 0.72rem;
+  font-weight: 1000;
+  letter-spacing: -0.01em;
+}
+
+footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+@media (max-width: 760px) {
+  #page-virtual.active {
+    padding-bottom: 168px;
+  }
+
+  .virtual-stage-card {
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+  }
+
+  .virtual-stage {
+    width: 1320px;
+    min-height: 500px;
+  }
+
+  .virtual-controls,
+  .virtual-skill-pad {
+    bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .virtual-skill-pad {
+    right: 8px;
+    grid-template-columns: 72px 72px;
+  }
+
+  .virtual-controls {
+    left: 8px;
+  }
+
+  .skill-btn {
+    min-height: 60px;
+  }
+
+  .skill-btn.skill-attack {
+    transform: scale(1.06);
+  }
+
+  #page-virtual.active .virtual-chat-panel {
+    margin-bottom: 8px;
+  }
+}
+
+@media (max-width: 390px) {
+  #page-virtual.active {
+    padding-bottom: 158px;
+  }
+
+  .virtual-skill-pad {
+    grid-template-columns: 64px 64px;
+  }
+
+  .skill-btn {
+    min-height: 56px;
+  }
+}
