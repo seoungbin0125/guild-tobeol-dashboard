@@ -6,15 +6,15 @@
     "풍년순대국밥"
   ],
   "guild": "반짝 · 풍년순대국밥",
-  "capturedDate": "2026-07-30",
+  "capturedDate": "2026-07-31",
   "comparisonMode": "weekly",
   "comparisonOffsetDays": -7,
-  "comparisonTargetDate": "2026-07-23",
+  "comparisonTargetDate": "2026-07-24",
   "comparisonDates": {
-    "반짝": "2026-07-23",
-    "풍년순대국밥": "2026-07-23"
+    "반짝": "2026-07-24",
+    "풍년순대국밥": "2026-07-24"
   },
-  "comparisonDateText": "반짝: 2026-07-23 · 풍년순대국밥: 2026-07-23",
+  "comparisonDateText": "반짝: 2026-07-24 · 풍년순대국밥: 2026-07-24",
   "dataSource": "MGF guild_info",
   "sourceUrls": {
     "반짝": "https://mgf.gg/contents/guild_info.php?g_name=%EB%B0%98%EC%A7%9D",
@@ -1420,11 +1420,11 @@
       "level": 107,
       "powerValue": 159932865500000,
       "powerText": "159조 9328억 6550만",
-      "previousPowerValue": 124985431680000,
-      "previousPowerText": "124조 9854억 3168만",
-      "powerGrowthValue": 34947433820000,
-      "powerGrowthText": "+34조 9474억 3382만",
-      "powerGrowthRate": 27.96,
+      "previousPowerValue": 148287886950000,
+      "previousPowerText": "148조 2878억 8695만",
+      "powerGrowthValue": 11644978550000,
+      "powerGrowthText": "+11조 6449억 7855만",
+      "powerGrowthRate": 7.85,
       "tobeolValue": 10307220000,
       "tobeolText": "103억 722만",
       "previousTobeolValue": 10307220000,
