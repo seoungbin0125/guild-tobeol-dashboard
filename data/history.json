@@ -20501,5 +20501,483 @@
         "tobeolValue": 0
       }
     ]
+  },
+  {
+    "date": "2026-08-05",
+    "guild": "반짝",
+    "sourceUrl": "https://mgf.gg/contents/guild_info.php?g_name=%EB%B0%98%EC%A7%9D",
+    "members": [
+      {
+        "nickname": "냥쪼미",
+        "rank": 1,
+        "job": "비숍",
+        "level": 123,
+        "powerValue": 1785076478552990000,
+        "tobeolValue": 884098710000
+      },
+      {
+        "nickname": "띠슝",
+        "rank": 2,
+        "job": "히어로",
+        "level": 119,
+        "powerValue": 217286516001450000,
+        "tobeolValue": 406532880000
+      },
+      {
+        "nickname": "느얭",
+        "rank": 3,
+        "job": "바이퍼",
+        "level": 119,
+        "powerValue": 192202239093480000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "캡딸",
+        "rank": 4,
+        "job": "캡틴",
+        "level": 118,
+        "powerValue": 173595846321100000,
+        "tobeolValue": 263319210000
+      },
+      {
+        "nickname": "란뜨",
+        "rank": 5,
+        "job": "비숍",
+        "level": 118,
+        "powerValue": 96276408042020000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "라온K",
+        "rank": 6,
+        "job": "섀도어",
+        "level": 120,
+        "powerValue": 91458923773710000,
+        "tobeolValue": 311059960000
+      },
+      {
+        "nickname": "복씽",
+        "rank": 7,
+        "job": "섀도어",
+        "level": 117,
+        "powerValue": 58020230546350000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "아몬드롱롱",
+        "rank": 8,
+        "job": "아크메이지(불,독)",
+        "level": 120,
+        "powerValue": 51585004710560000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "봉지쑤시개",
+        "rank": 9,
+        "job": "캡틴",
+        "level": 117,
+        "powerValue": 49416502606090000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "씨전액환불발",
+        "rank": 10,
+        "job": "신궁",
+        "level": 116,
+        "powerValue": 26135937010660000,
+        "tobeolValue": 159531640000
+      },
+      {
+        "nickname": "밍또기",
+        "rank": 11,
+        "job": "섀도어",
+        "level": 115,
+        "powerValue": 18952305507540000,
+        "tobeolValue": 67533200000
+      },
+      {
+        "nickname": "인민펀치",
+        "rank": 12,
+        "job": "섀도어",
+        "level": 114,
+        "powerValue": 18854415780700000,
+        "tobeolValue": 19390700000
+      },
+      {
+        "nickname": "득규",
+        "rank": 13,
+        "job": "비숍",
+        "level": 116,
+        "powerValue": 18765092560090000,
+        "tobeolValue": 129446890000
+      },
+      {
+        "nickname": "욱진3",
+        "rank": 14,
+        "job": "팔라딘",
+        "level": 115,
+        "powerValue": 14395127989250000,
+        "tobeolValue": 67056270000
+      },
+      {
+        "nickname": "망동",
+        "rank": 15,
+        "job": "다크나이트",
+        "level": 115,
+        "powerValue": 10796677277640000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "결하",
+        "rank": 16,
+        "job": "비숍",
+        "level": 114,
+        "powerValue": 5153027262740000,
+        "tobeolValue": 36672840000
+      },
+      {
+        "nickname": "z도적s성현z",
+        "rank": 17,
+        "job": "나이트로드",
+        "level": 112,
+        "powerValue": 3866834632720000,
+        "tobeolValue": 19630040000
+      },
+      {
+        "nickname": "천화법화",
+        "rank": 18,
+        "job": "비숍",
+        "level": 111,
+        "powerValue": 3319583751750000,
+        "tobeolValue": 17730360000
+      },
+      {
+        "nickname": "으웩",
+        "rank": 19,
+        "job": "바이퍼",
+        "level": 113,
+        "powerValue": 2081469724990000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "빨풍",
+        "rank": 20,
+        "job": "신궁",
+        "level": 112,
+        "powerValue": 2003817166440000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "코푼",
+        "rank": 21,
+        "job": "비숍",
+        "level": 112,
+        "powerValue": 1977066644550000,
+        "tobeolValue": 29203080000
+      },
+      {
+        "nickname": "걀보",
+        "rank": 22,
+        "job": "비숍",
+        "level": 111,
+        "powerValue": 1713653760420000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "하깁s",
+        "rank": 23,
+        "job": "다크나이트",
+        "level": 111,
+        "powerValue": 1699717198510000,
+        "tobeolValue": 10094770000
+      },
+      {
+        "nickname": "복써",
+        "rank": 24,
+        "job": "섀도어",
+        "level": 110,
+        "powerValue": 1153210263560000,
+        "tobeolValue": 10564750000
+      },
+      {
+        "nickname": "단소빌런",
+        "rank": 25,
+        "job": "바이퍼",
+        "level": 110,
+        "powerValue": 1010148077060000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "승호숍",
+        "rank": 26,
+        "job": "비숍",
+        "level": 111,
+        "powerValue": 856640846680000,
+        "tobeolValue": 11324350000
+      },
+      {
+        "nickname": "더반",
+        "rank": 27,
+        "job": "다크나이트",
+        "level": 111,
+        "powerValue": 711981195030000,
+        "tobeolValue": 14010270000
+      },
+      {
+        "nickname": "바개몬",
+        "rank": 28,
+        "job": "아크메이지(썬,콜)",
+        "level": 110,
+        "powerValue": 709095738400000,
+        "tobeolValue": 16867920000
+      },
+      {
+        "nickname": "뿌료",
+        "rank": 29,
+        "job": "비숍",
+        "level": 110,
+        "powerValue": 626836397600000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "랏뚜",
+        "rank": 30,
+        "job": "히어로",
+        "level": 110,
+        "powerValue": 490958069530000,
+        "tobeolValue": 14523030000
+      }
+    ]
+  },
+  {
+    "date": "2026-08-05",
+    "guild": "풍년순대국밥",
+    "sourceUrl": "https://mgf.gg/contents/guild_info.php?g_name=%ED%92%8D%EB%85%84%EC%88%9C%EB%8C%80%EA%B5%AD%EB%B0%A5",
+    "members": [
+      {
+        "nickname": "처녀여신슬기",
+        "rank": 1,
+        "job": "비숍",
+        "level": 110,
+        "powerValue": 867440884870000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "쪼록",
+        "rank": 2,
+        "job": "섀도어",
+        "level": 110,
+        "powerValue": 676354089170000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "취침",
+        "rank": 3,
+        "job": "아크메이지(썬,콜)",
+        "level": 109,
+        "powerValue": 671886071260000,
+        "tobeolValue": 10935830000
+      },
+      {
+        "nickname": "윈썬콜",
+        "rank": 4,
+        "job": "아크메이지(썬,콜)",
+        "level": 109,
+        "powerValue": 600872056300000,
+        "tobeolValue": 11220150000
+      },
+      {
+        "nickname": "갱미킴",
+        "rank": 5,
+        "job": "바이퍼",
+        "level": 109,
+        "powerValue": 600613006490000,
+        "tobeolValue": 10421810000
+      },
+      {
+        "nickname": "밍츄핑",
+        "rank": 6,
+        "job": "섀도어",
+        "level": 108,
+        "powerValue": 547912543540000,
+        "tobeolValue": 21596320000
+      },
+      {
+        "nickname": "이지은선생님",
+        "rank": 7,
+        "job": "섀도어",
+        "level": 108,
+        "powerValue": 406585446380000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "은디탁",
+        "rank": 8,
+        "job": "히어로",
+        "level": 109,
+        "powerValue": 401727997760000,
+        "tobeolValue": 12624660000
+      },
+      {
+        "nickname": "보리쇼츄",
+        "rank": 9,
+        "job": "섀도어",
+        "level": 110,
+        "powerValue": 382387371640000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "다누비",
+        "rank": 10,
+        "job": "캡틴",
+        "level": 107,
+        "powerValue": 332963027030000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "왕오이",
+        "rank": 11,
+        "job": "섀도어",
+        "level": 109,
+        "powerValue": 331156507590000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "로먕",
+        "rank": 12,
+        "job": "섀도어",
+        "level": 109,
+        "powerValue": 309200642000000,
+        "tobeolValue": 12375220000
+      },
+      {
+        "nickname": "늙은마",
+        "rank": 13,
+        "job": "비숍",
+        "level": 109,
+        "powerValue": 302537334850000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "그냐앙",
+        "rank": 14,
+        "job": "비숍",
+        "level": 108,
+        "powerValue": 275392839830000,
+        "tobeolValue": 8950990000
+      },
+      {
+        "nickname": "24YB",
+        "rank": 15,
+        "job": "신궁",
+        "level": 109,
+        "powerValue": 251895319640000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "근카자",
+        "rank": 16,
+        "job": "섀도어",
+        "level": 107,
+        "powerValue": 231044544790000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "감성만땅보이",
+        "rank": 17,
+        "job": "섀도어",
+        "level": 106,
+        "powerValue": 203868133210000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "이호은",
+        "rank": 18,
+        "job": "섀도어",
+        "level": 107,
+        "powerValue": 199845145400000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "야제",
+        "rank": 19,
+        "job": "섀도어",
+        "level": 107,
+        "powerValue": 198694164980000,
+        "tobeolValue": 10307220000
+      },
+      {
+        "nickname": "애기이잉",
+        "rank": 20,
+        "job": "아크메이지(썬,콜)",
+        "level": 106,
+        "powerValue": 186005830150000,
+        "tobeolValue": 10038480000
+      },
+      {
+        "nickname": "혁혁",
+        "rank": 21,
+        "job": "아크메이지(썬,콜)",
+        "level": 106,
+        "powerValue": 181527232750000,
+        "tobeolValue": 8412070000
+      },
+      {
+        "nickname": "네모수박",
+        "rank": 22,
+        "job": "아크메이지(썬,콜)",
+        "level": 108,
+        "powerValue": 178000630040000,
+        "tobeolValue": 10244010000
+      },
+      {
+        "nickname": "부라",
+        "rank": 23,
+        "job": "아크메이지(썬,콜)",
+        "level": 108,
+        "powerValue": 176221836160000,
+        "tobeolValue": 8090110000
+      },
+      {
+        "nickname": "완팡",
+        "rank": 24,
+        "job": "보우마스터",
+        "level": 106,
+        "powerValue": 138990395930000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "켠석",
+        "rank": 25,
+        "job": "히어로",
+        "level": 107,
+        "powerValue": 133601372570000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "jinajina",
+        "rank": 26,
+        "job": "비숍",
+        "level": 108,
+        "powerValue": 123577964270000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "덕장이다습할",
+        "rank": 27,
+        "job": "보우마스터",
+        "level": 107,
+        "powerValue": 92286716550000,
+        "tobeolValue": 0
+      },
+      {
+        "nickname": "믄지",
+        "rank": 28,
+        "job": "보우마스터",
+        "level": 106,
+        "powerValue": 90068440080000,
+        "tobeolValue": 0
+      }
+    ]
   }
 ]
