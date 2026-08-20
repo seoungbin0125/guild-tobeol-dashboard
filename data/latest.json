@@ -6,15 +6,15 @@
     "풍년순대국밥"
   ],
   "guild": "반짝 · 풍년순대국밥",
-  "capturedDate": "2026-08-20",
+  "capturedDate": "2026-08-21",
   "comparisonMode": "weekly",
   "comparisonOffsetDays": -7,
-  "comparisonTargetDate": "2026-08-13",
+  "comparisonTargetDate": "2026-08-14",
   "comparisonDates": {
-    "반짝": "2026-08-13",
-    "풍년순대국밥": "2026-08-13"
+    "반짝": "2026-08-14",
+    "풍년순대국밥": "2026-08-14"
   },
-  "comparisonDateText": "반짝: 2026-08-13 · 풍년순대국밥: 2026-08-13",
+  "comparisonDateText": "반짝: 2026-08-14 · 풍년순대국밥: 2026-08-14",
   "dataSource": "MGF guild_info",
   "sourceUrls": {
     "반짝": "https://mgf.gg/contents/guild_info.php?g_name=%EB%B0%98%EC%A7%9D",
@@ -23,7 +23,7 @@
   "summary": {
     "guildCount": 2,
     "memberCount": 58,
-    "totalPowerValue": 3746305266345129500,
+    "totalPowerValue": 3763140858566419500,
     "totalTobeolValue": 2632623140000
   },
   "manualAppliedCount": 0,
@@ -94,7 +94,7 @@
     "반짝": {
       "guildCount": 1,
       "memberCount": 30,
-      "totalPowerValue": 3731027884822359600,
+      "totalPowerValue": 3747863477043649500,
       "totalTobeolValue": 2488590870000
     },
     "풍년순대국밥": {
@@ -202,6 +202,29 @@
       "sourceUrl": "https://mgf.gg/contents/guild_info.php?g_name=%EB%B0%98%EC%A7%9D",
       "memberStatus": "existing",
       "rank": 5,
+      "nickname": "란뜨",
+      "job": "비숍",
+      "level": 120,
+      "powerValue": 119594650446960000,
+      "powerText": "11경 9594조 6504억 4696만",
+      "previousPowerValue": 96276408042020000,
+      "previousPowerText": "9경 6276조 4080억 4202만",
+      "powerGrowthValue": 23318242404940000,
+      "powerGrowthText": "+2경 3318조 2424억 494만",
+      "powerGrowthRate": 24.22,
+      "tobeolValue": 0,
+      "tobeolText": "0",
+      "previousTobeolValue": 0,
+      "previousTobeolText": "0",
+      "tobeolGrowthValue": 0,
+      "tobeolGrowthText": "0",
+      "tobeolGrowthRate": null
+    },
+    {
+      "guild": "반짝",
+      "sourceUrl": "https://mgf.gg/contents/guild_info.php?g_name=%EB%B0%98%EC%A7%9D",
+      "memberStatus": "existing",
+      "rank": 6,
       "nickname": "라온K",
       "job": "섀도어",
       "level": 121,
@@ -219,29 +242,6 @@
       "tobeolGrowthValue": 0,
       "tobeolGrowthText": "0",
       "tobeolGrowthRate": 0
-    },
-    {
-      "guild": "반짝",
-      "sourceUrl": "https://mgf.gg/contents/guild_info.php?g_name=%EB%B0%98%EC%A7%9D",
-      "memberStatus": "existing",
-      "rank": 6,
-      "nickname": "란뜨",
-      "job": "비숍",
-      "level": 119,
-      "powerValue": 102759058225670000,
-      "powerText": "10경 2759조 582억 2567만",
-      "previousPowerValue": 96276408042020000,
-      "previousPowerText": "9경 6276조 4080억 4202만",
-      "powerGrowthValue": 6482650183650000,
-      "powerGrowthText": "+6482조 6501억 8365만",
-      "powerGrowthRate": 6.73,
-      "tobeolValue": 0,
-      "tobeolText": "0",
-      "previousTobeolValue": 0,
-      "previousTobeolText": "0",
-      "tobeolGrowthValue": 0,
-      "tobeolGrowthText": "0",
-      "tobeolGrowthRate": null
     },
     {
       "guild": "반짝",
