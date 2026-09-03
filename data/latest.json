@@ -6,15 +6,15 @@
     "풍년순대국밥"
   ],
   "guild": "반짝 · 풍년순대국밥",
-  "capturedDate": "2026-09-03",
+  "capturedDate": "2026-09-04",
   "comparisonMode": "weekly",
   "comparisonOffsetDays": -7,
-  "comparisonTargetDate": "2026-08-27",
+  "comparisonTargetDate": "2026-08-28",
   "comparisonDates": {
-    "반짝": "2026-08-27",
-    "풍년순대국밥": "2026-08-27"
+    "반짝": "2026-08-28",
+    "풍년순대국밥": "2026-08-28"
   },
-  "comparisonDateText": "반짝: 2026-08-27 · 풍년순대국밥: 2026-08-27",
+  "comparisonDateText": "반짝: 2026-08-28 · 풍년순대국밥: 2026-08-28",
   "dataSource": "MGF guild_info",
   "sourceUrls": {
     "반짝": "https://mgf.gg/contents/guild_info.php?g_name=%EB%B0%98%EC%A7%9D",
@@ -81,26 +81,14 @@
       ]
     },
     "풍년순대국밥": {
-      "newCount": 1,
+      "newCount": 0,
       "departedCount": 4,
-      "newMembers": [
-        {
-          "guild": "풍년순대국밥",
-          "nickname": "머퓌",
-          "rank": 3,
-          "job": "아크메이지(불,독)",
-          "level": 114,
-          "powerValue": 2116777120550000,
-          "powerText": "2116조 7771억 2055만",
-          "tobeolValue": 0,
-          "tobeolText": "0"
-        }
-      ],
+      "newMembers": [],
       "departedMembers": [
         {
           "guild": "풍년순대국밥",
           "nickname": "이호은",
-          "rank": 22,
+          "rank": 23,
           "job": "섀도어",
           "level": 108,
           "powerValue": 378849141890000,
@@ -111,7 +99,7 @@
         {
           "guild": "풍년순대국밥",
           "nickname": "혁혁",
-          "rank": 29,
+          "rank": 30,
           "job": "아크메이지(썬,콜)",
           "level": 108,
           "powerValue": 273759074870000,
@@ -122,7 +110,7 @@
         {
           "guild": "풍년순대국밥",
           "nickname": "켠석",
-          "rank": 30,
+          "rank": 31,
           "job": "히어로",
           "level": 108,
           "powerValue": 236954630230000,
@@ -133,7 +121,7 @@
         {
           "guild": "풍년순대국밥",
           "nickname": "jinajina",
-          "rank": 31,
+          "rank": 32,
           "job": "비숍",
           "level": 109,
           "powerValue": 218265215380000,
@@ -170,7 +158,7 @@
     {
       "guild": "풍년순대국밥",
       "nickname": "이호은",
-      "rank": 22,
+      "rank": 23,
       "job": "섀도어",
       "level": 108,
       "powerValue": 378849141890000,
@@ -181,7 +169,7 @@
     {
       "guild": "풍년순대국밥",
       "nickname": "혁혁",
-      "rank": 29,
+      "rank": 30,
       "job": "아크메이지(썬,콜)",
       "level": 108,
       "powerValue": 273759074870000,
@@ -192,7 +180,7 @@
     {
       "guild": "풍년순대국밥",
       "nickname": "켠석",
-      "rank": 30,
+      "rank": 31,
       "job": "히어로",
       "level": 108,
       "powerValue": 236954630230000,
@@ -203,7 +191,7 @@
     {
       "guild": "풍년순대국밥",
       "nickname": "jinajina",
-      "rank": 31,
+      "rank": 32,
       "job": "비숍",
       "level": 109,
       "powerValue": 218265215380000,
@@ -720,11 +708,11 @@
       "level": 115,
       "powerValue": 7921853551180000,
       "powerText": "7921조 8535억 5118만",
-      "previousPowerValue": 5179341751940000,
-      "previousPowerText": "5179조 3417억 5194만",
-      "powerGrowthValue": 2742511799240000,
-      "powerGrowthText": "+2742조 5117억 9924만",
-      "powerGrowthRate": 52.95,
+      "previousPowerValue": 6347697161700000,
+      "previousPowerText": "6347조 6971억 6170만",
+      "powerGrowthValue": 1574156389480000,
+      "powerGrowthText": "+1574조 1563억 8948만",
+      "powerGrowthRate": 24.8,
       "tobeolValue": 0,
       "tobeolText": "0",
       "previousTobeolValue": 0,
@@ -966,24 +954,24 @@
     {
       "guild": "풍년순대국밥",
       "sourceUrl": "https://mgf.gg/contents/guild_info.php?g_name=%ED%92%8D%EB%85%84%EC%88%9C%EB%8C%80%EA%B5%AD%EB%B0%A5",
-      "memberStatus": "new",
+      "memberStatus": "existing",
       "rank": 3,
       "nickname": "머퓌",
       "job": "아크메이지(불,독)",
       "level": 114,
       "powerValue": 2116777120550000,
       "powerText": "2116조 7771억 2055만",
-      "previousPowerValue": null,
-      "previousPowerText": null,
-      "powerGrowthValue": null,
-      "powerGrowthText": null,
-      "powerGrowthRate": null,
+      "previousPowerValue": 2056505150660000,
+      "previousPowerText": "2056조 5051억 5066만",
+      "powerGrowthValue": 60271969890000,
+      "powerGrowthText": "+60조 2719억 6989만",
+      "powerGrowthRate": 2.93,
       "tobeolValue": 0,
       "tobeolText": "0",
-      "previousTobeolValue": null,
-      "previousTobeolText": null,
-      "tobeolGrowthValue": null,
-      "tobeolGrowthText": null,
+      "previousTobeolValue": 0,
+      "previousTobeolText": "0",
+      "tobeolGrowthValue": 0,
+      "tobeolGrowthText": "0",
       "tobeolGrowthRate": null
     },
     {
